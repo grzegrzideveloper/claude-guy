@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('api', {
   clickupTaskStatuses: keys => ipcRenderer.invoke('clickup:taskStatuses', keys),
   clickupTaskDetail: key => ipcRenderer.invoke('clickup:taskDetail', key),
   clickupAttachment: url => ipcRenderer.invoke('clickup:attachment', url),
+  usage: opts => ipcRenderer.invoke('usage:get', opts),
   onPtyData: fn => on('pty:data', fn),
   onPtyExit: fn => on('pty:exit', fn),
   onSessionsChanged: fn => on('sessions:changed', fn),

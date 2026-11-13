@@ -27,11 +27,11 @@ Plan i stan prac: `PLAN.md` (aktualizuj checkboxy po każdym kroku). Dokumentacj
 | `src/sessions.js` | `listSessions(limit=200)` — szczegóły niżej |
 | `src/store.js` | Atomowy odczyt/zapis JSON w `app.getPath('userData')` |
 | `src/pty.js` | Jeden PTY na zakładkę (`@lydell/node-pty`) |
-| `src/usage.js` | (etap 3) limity planu |
+| `src/usage.js` | Limity planu: token OAuth Claude Code (macOS: Keychain `security find-generic-password -s "Claude Code-credentials" -w`, fallback/Windows: `<claudeDir>/.credentials.json` → `claudeAiOauth.accessToken`) → `GET https://api.anthropic.com/api/oauth/usage` z `anthropic-beta: oauth-2025-04-20`. Nieudokumentowany endpoint; każdy błąd → `{ ok: false, reason }` |
 | `src/clickup.js` | REST ClickUp v2 z osobistym tokenem (nagłówek `Authorization: <token>` bez „Bearer”): `getUser`, `getTeams`, `getMyTasks` (`/team/{id}/task?assignees[]=…&include_closed=false&subtasks=true`, strony po 100, odfiltrowane `hiddenStatuses`, domyślnie `closed`), `getTask` (custom ID → `?custom_task_ids=true&team_id=…`), `getTaskDetail` (opis Markdown, załączniki, checklisty, subtaski, komentarze), `fetchAttachment` (tylko https i hosty ClickUp → `data:` URL, limit 15 MB; typ obrazka rozpoznawany po sygnaturze bajtów, bo oryginały przychodzą jako `application/octet-stream`; odpowiedź 401/403 albo 200 z HTML (strona logowania przy workspace'ach wymagających logowania do załączników) → ponowienie z tokenem; nieudane pobrania logowane z hostem i statusem, bez URL i tokenu) |
 | `src/secrets.js` | Sekrety (token ClickUp) zaszyfrowane `safeStorage` w `secrets.bin`. Tylko main |
 | `src/hubstaff.js` | (etap 5) czas pracy |
-| `renderer/` | `index.html`, `style.css` i zwykłe skrypty (bez ES modules, kolejność w `index.html`): `util.js` (`$`, `el`, `relTime`, `fullTime`), `taskview.js` (`TaskView`: widok taska), `menu.js` (`CtxMenu`), `toast.js` (`Toasts`), `groups.js` (`Groups`, `PALETTE` — model grup), `dialogs.js` (`Dialogs`: `promptName`, `statusEditor`, `manageStatuses`, `newSession`, `askCloseTab`, `settings`; jedno okno naraz — otwarcie nowego porzuca poprzednie), `sidebar.js` (`Sidebar`), `tabs.js` (`Tabs`), `app.js` (`App`, start). xterm i fit addon, `marked` i `DOMPurify` jako UMD z `../node_modules` (globalne `Terminal`, `FitAddon.FitAddon`, `marked`, `DOMPurify`) |
+| `renderer/` | `index.html`, `style.css` i zwykłe skrypty (bez ES modules, kolejność w `index.html`): `util.js` (`$`, `el`, `relTime`, `fullTime`), `taskview.js` (`TaskView`: widok taska), `usage.js` (`Usage`: limity planu na dole sidebaru), `menu.js` (`CtxMenu`), `toast.js` (`Toasts`), `groups.js` (`Groups`, `PALETTE` — model grup), `dialogs.js` (`Dialogs`: `promptName`, `statusEditor`, `manageStatuses`, `newSession`, `askCloseTab`, `settings`; jedno okno naraz — otwarcie nowego porzuca poprzednie), `sidebar.js` (`Sidebar`), `tabs.js` (`Tabs`), `app.js` (`App`, start). xterm i fit addon, `marked` i `DOMPurify` jako UMD z `../node_modules` (globalne `Terminal`, `FitAddon.FitAddon`, `marked`, `DOMPurify`) |
 | `scripts/screenshot.js` | Off-screen render prawdziwego UI do PNG |
 
 ### Kanały IPC
@@ -41,7 +41,8 @@ Plan i stan prac: `PLAN.md` (aktualizuj checkboxy po każdym kroku). Dokumentacj
 - system: `open:external`, `clipboard:read`, `clipboard:write`, `app:info` (platforma, wersja)
 - main → renderer: `pty:data`, `pty:exit`, `sessions:changed`
 - ClickUp: `clickup:status` (bez tokenu: `configured`, user, workspace), `clickup:connect(token)` (weryfikuje, trzyma token w pamięci main), `clickup:save({ teamId })` (zapisuje token do `secrets`, user/workspace do `settings.clickup`), `clickup:disconnect`, `clickup:tasks({ force })` (cache 2 min w `clickup-tasks.json`, równoległe wywołania dołączają do trwającego), `clickup:taskStatuses(keys)` (status pojedynczych tasków, max 40 na wywołanie, 4 równolegle), `clickup:taskDetail(key)`, `clickup:attachment(url)`
-- (później) `usage:get`, `hubstaff:*`
+- `usage:get({ force })` → `{ ok, windows: [{ key, label, pct, resetsAt }], fetchedAt }` albo `{ ok: false, reason }`; cache min. 60 s (także z force), bez force ~4,5 min
+- (później) `hubstaff:*`
 
 ### Pliki danych (`userData`)
 | Plik | Zawartość |
@@ -77,7 +78,7 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
 - **Grupy są automatyczne:** `Groups.keyOf(s)` = `task:DEV-123` (z własnej nazwy, pierwszego promptu albo gałęzi) albo `project:<nazwa>`. Ręcznie nie przenosi się sesji między grupami.
 - **Status to cecha sesji:** `assignments[sessionId] = 'status:<id>'`, `Groups.statusOf(s)` zwraca status albo `null` („bez statusu”). Wbudowane `in_progress` i `completed` (nie do usunięcia), reszta własna (`s_<losowe>`), zarządzana w oknie Statusy (`Dialogs.manageStatuses`).
 - **Completed:** grupa, w której *wszystkie* sesje mają `completed` (`Groups.isDone`), idzie do zwiniętej sekcji `sec:completed` na dole. Wznowienie sesji ustawia `in_progress`, więc grupa wraca do „W toku”.
-- Kolejność w Sesjach: Ostatnie (`sec:recent`), „W toku” (grupy wg najnowszej sesji), Completed. Nagłówek grupy: nazwa, (task) tytuł najnowszej sesji bez prefiksu taska (`stripTask`; w etapie 4 tytuł z ClickUp), kropki obecnych statusów, liczba sesji, link do ClickUp.
+- Kolejność w Sesjach: Ostatnie (`sec:recent`), „W toku” (grupy wg najnowszej sesji), Completed. Nagłówek grupy: nazwa, (task) tytuł najnowszej sesji bez prefiksu taska (`stripTask`; w etapie 4 tytuł z ClickUp), kropki obecnych statusów, liczba sesji, ikona podglądu taska w apce (`Tabs.openTaskPreview`, gdy ClickUp skonfigurowany) i link do ClickUp w przeglądarce.
 - Zwinięcie: `collapsed[key]`. Grupy wewnątrz Completed mają osobny klucz `done|<key>` i są domyślnie zwinięte; `sec:completed` też.
 - `Tabs.open()` ustawia `in_progress` tylko przy tworzeniu nowej zakładki; „+ Nowa” też. Przywracanie zakładek niczego nie zmienia.
 - Zmiana statusu: menu sesji (`App.sessionMenu`, sekcja Status), menu grupy (`Sidebar.groupMenu`: „Oznacz wszystkie jako…”, nowa sesja dla taska/projektu, ClickUp), dialog zamykania zakładki (`Dialogs.askCloseTab` → id statusu, `'close'` albo `null`).
@@ -101,7 +102,7 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
 
 ## Zasady
 - **Apka jest dla wielu osób.** Żadnych nazw firmy, ID workspace'ów, userów, ścieżek ani prefiksów na sztywno w kodzie. Wszystko z ustawień albo wykrywane (np. user i workspace z API ClickUp).
-- **Zero tokenów w sidebarze.** Wszystko z lokalnego parsowania. Żadnego `claude -p` ani API Anthropic do budowania listy. Wywołania zużywające limit tylko na wyraźne kliknięcie.
+- **Zero tokenów w sidebarze.** Wszystko z lokalnego parsowania. Żadnego `claude -p` ani API Anthropic do budowania listy. Wywołania zużywające limit tylko na wyraźne kliknięcie (np. pierwszy prompt „Zacznij od pobrania taska”). Panel Usage odpytuje tylko endpoint z liczbami limitów — nie zużywa limitu.
 - **Sekrety tylko w main.** Token OAuth Claude'a, tokeny ClickUp i Hubstaff: nigdy w logach, plikach JSON, kodzie ani w kierunku main → renderer. Jedyny wyjątek: token ClickUp wpisany przez użytkownika idzie raz renderer → main (`clickup:connect`). Zapis przez `safeStorage` (`src/secrets.js`). Nie proś użytkownika o wklejanie tokenów w czacie.
 - Renderer: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. Nowe możliwości = handler IPC w `main.js` + metoda w `preload.js`.
 - Tytuły sesji, własne nazwy, nazwy kategorii i dane z ClickUp to treść użytkownika: tylko `textContent`, nigdy `innerHTML`. Jedyny wyjątek: opis taska (Markdown) w `TaskView.toSafeHtml` — zawsze przez `DOMPurify`. Statyczne ikony SVG z kodu mogą iść przez `innerHTML`.
@@ -124,6 +125,7 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
 - **Paski przewijania** są stylowane `::-webkit-scrollbar`, więc widać je zawsze (macOS domyślnie ukrywa nakładkowe paski).
 - **Kolizje nazw klas CSS:** style są globalne. Klasa `.empty` (pełnoekranowy stan „Brak otwartej sesji”) dodana do pola ścieżki w oknie Nowa sesja rozciągnęła je na całe okno i zasłoniła UI. Ogólnych nazw (`empty`, `active`, `open`, `hidden`) używaj tylko z prefiksem komponentu albo selektorem zawężonym (`#empty.empty`). Testy zrzutami muszą obejmować też stany puste (np. dialog bez podpowiedzi folderu).
 - **Diagnostyka na żywo:** Cmd+Option+I / Ctrl+Shift+I / F12 otwiera DevTools, Cmd/Ctrl+Shift+R przeładowuje UI (zabija PTY, zakładki wracają przez `--resume`). Skróty sprawdzają `input.code` (`KeyI`), bo na macOS Option zmienia znak. Ostrzeżenia i błędy renderera trafiają do logu (`console-message`).
+- **Keychain na macOS:** pierwszy odczyt tokenu Claude Code przez `security` może pokazać systemowe pytanie o dostęp do „Claude Code-credentials” (Zezwól / Zawsze zezwalaj). `execFile` czeka do 90 s; odmowa → fallback na plik, a gdy go nie ma → panel „Niedostępne”.
 - **Glify** spoza fontów systemowych (np. ⧉) renderują się jako puste prostokąty. Ikony robimy inline SVG.
 - **`fs.watch` recursive** działa natywnie na macOS i Windows. Pod runtime `wsl` (`\\wsl$`) będzie potrzebny polling.
 
@@ -134,6 +136,7 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
   - Tryb headless (`--claude-gui-headless`) nie przywraca ani nie zapisuje zakładek i nie spawnuje `claude`.
   - Testy zapisujące stan: ustaw `CLAUDE_GUI_DATA_DIR` na kopię danych, żeby nie nadpisać prawdziwych.
   - Sztuczne sesje: `CLAUDE_CONFIG_DIR=/tmp/fk` z plikami `/tmp/fk/projects/<dir>/<uuid>.jsonl`.
+  - Usage bez prawdziwego API: `CLAUDE_GUI_USAGE_URL=http://127.0.0.1:<port>/…` + `<CLAUDE_CONFIG_DIR>/.credentials.json` z testowym tokenem (na Linuksie nie ma Keychain).
   - ClickUp bez prawdziwego API: lokalna atrapa (node http) i `CLICKUP_API_BASE=http://127.0.0.1:<port>/api/v2`; na Linuksie bez keyringa `CLAUDE_GUI_INSECURE_SECRETS=1`. Obie zmienne tylko do testów.
   - Terminal w zrzucie: `CLAUDE_GUI_SHOT_SPAWN=1` + `PATH` z atrapą `claude` (skrypt wypisujący argumenty i `exec bash`), np. `SHOT_JS="Tabs.open(App.sessions[0]); new Promise(r=>setTimeout(r,1500)).then(()=>0)"`.
 - `node -e "console.log(require('./src/sessions').listSessions(5))"`.

@@ -284,6 +284,7 @@ const App = {
     this.loadClickup(); // cached (2 min) unless stale
     setInterval(() => this.loadClickup({ force: true }), 10 * 60 * 1000);
     this.onboarding();
+    Usage.start();
 
     api.onPtyData((id, data) => { const t = Tabs.tabs.get(id); if (t && t.term) t.term.write(data); });
     api.onPtyExit((id, code) => Tabs.onExit(id, code));

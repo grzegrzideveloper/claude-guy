@@ -112,9 +112,11 @@ Apka ma działać u wielu osób: nic nie jest wpisane na sztywno, każdy podaje 
 - [x] Obrazki w opisie taska wyświetlały się jako linki: oryginały z `*.clickup-attachments.com` zwracają HTML (logowanie). Poprawka: ponowienie z tokenem, potem miniatura dopasowanego załącznika — potwierdzone u użytkownika
 
 ### Etap 7 — Usage (limity planu)
-- [ ] Odczyt tokenu OAuth: macOS z Keychain (`security find-generic-password …`, do weryfikacji nazwa wpisu), Windows z `~/.claude/.credentials.json`
-- [ ] `GET /api/oauth/usage` (nieudokumentowany), paski 5 h i tygodniowe, odświeżanie co 5 min + przycisk, miejsce: dół sidebaru
-- [ ] Zachowanie gdy endpoint nie działa: „niedostępne”, bez crasha
+- [x] Odczyt tokenu OAuth: macOS z Keychain (`security find-generic-password …`, do weryfikacji nazwa wpisu), Windows z `~/.claude/.credentials.json`
+- [x] `GET /api/oauth/usage` (nieudokumentowany), paski 5 h i tygodniowe, odświeżanie co 5 min + przycisk, miejsce: dół sidebaru
+- [x] Zachowanie gdy endpoint nie działa: „niedostępne”, bez crasha
+- [x] Osobne paski dla tygodniowych limitów Opus/Sonnet, jeśli API je zwraca; kolory: <70% zielony, <90% żółty, potem czerwony
+- [ ] **Test użytkownika** (macOS, pytanie Keychain przy pierwszym odczycie)
 
 ### Etap 8 — Hubstaff (opcjonalnie)
 - [ ] Sprawdzić plan firmy (API od planu Team) i możliwość utworzenia Personal Access Token

@@ -1,4 +1,5 @@
 // Sidebar with three tabs: Sesje (grouped by task / project), Taski (ClickUp, stage 4), Historia (flat list).
+const ICON_PREVIEW = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2" width="11" height="12" rx="1.5"/><path d="M5 5.5h6M5 8h6M5 10.5h3.5"/></svg>';
 const ICON_EXT = '<svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h4v4M13 3L7 9M11 9.5V13H3V5h3.5"/></svg>';
 
 const PLACEHOLDERS = {
@@ -122,11 +123,18 @@ const Sidebar = {
     head.append(summary);
 
     if (isTask) {
+      if (App.clickup.status.configured) {
+        const pv = el('button', 'icon-btn g-link');
+        pv.innerHTML = ICON_PREVIEW; // static icon, no user content
+        pv.title = 'Podgląd taska w apce';
+        pv.onclick = e => { e.stopPropagation(); Tabs.openTaskPreview(label); };
+        head.append(pv);
+      }
       const url = Groups.taskUrl(label);
       if (url) {
         const a = el('button', 'icon-btn g-link');
         a.innerHTML = ICON_EXT; // static icon, no user content
-        a.title = 'Otwórz w ClickUp';
+        a.title = 'Otwórz w ClickUp (przeglądarka)';
         a.onclick = e => { e.stopPropagation(); api.openExternal(url); };
         head.append(a);
       }

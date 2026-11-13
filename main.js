@@ -10,6 +10,7 @@ const sessions = require('./src/sessions');
 const pty = require('./src/pty');
 const secrets = require('./src/secrets');
 const clickup = require('./src/clickup');
+const usage = require('./src/usage');
 const { getRuntime } = require('./src/runtime');
 
 const HEADLESS = process.env.CLAUDE_GUI_HEADLESS === '1' || process.argv.includes('--claude-gui-headless');
@@ -314,6 +315,25 @@ function main() {
       log(`attachment failed: host=${host} status=${err.status || 0} ${err.message}`); // no token, no full URL
       return errOut(err);
     }
+  });
+
+  // Plan usage. Cached for 60 s even with force, so a click-happy user can't hammer the endpoint.
+  let usageCache = null;
+  let usageInflight = null;
+  ipcMain.handle('usage:get', async (_e, { force = false } = {}) => {
+    const age = usageCache ? Date.now() - usageCache.at : Infinity;
+    if (usageCache && (age < 60 * 1000 || (!force && age < 4.5 * 60 * 1000))) return usageCache.data;
+    if (!usageInflight) {
+      usageInflight = usage.getUsage(runtime().claudeDir())
+        .then(data => {
+          if (!data.ok) log(`usage unavailable: ${data.reason}`);
+          usageCache = { at: Date.now(), data };
+          return data;
+        })
+        .catch(err => ({ ok: false, reason: err.message }))
+        .finally(() => { usageInflight = null; });
+    }
+    return usageInflight;
   });
 
   // Cached for 2 minutes unless force. A second call while fetching joins the running one.
