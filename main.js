@@ -304,9 +304,14 @@ function main() {
   ipcMain.handle('clickup:attachment', async (_e, url) => {
     const token = cuToken();
     if (!token) return { ok: false, error: 'ClickUp nie jest skonfigurowany.' };
+    let host = '?';
+    try { host = new URL(String(url)).hostname; } catch { /* invalid */ }
     try {
-      return { ok: true, ...(await clickup.fetchAttachment(token, String(url || ''))) };
+      const r = await clickup.fetchAttachment(token, String(url || ''));
+      if (!r.type.startsWith('image/')) log(`attachment not an image: host=${host} type=${r.headerType}`);
+      return { ok: true, type: r.type, dataUrl: r.dataUrl };
     } catch (err) {
+      log(`attachment failed: host=${host} status=${err.status || 0} ${err.message}`); // no token, no full URL
       return errOut(err);
     }
   });

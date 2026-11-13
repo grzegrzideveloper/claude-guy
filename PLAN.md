@@ -108,7 +108,8 @@ Apka ma działać u wielu osób: nic nie jest wpisane na sztywno, każdy podaje 
 - [x] **Podgląd z zakładki Taski** (przycisk „Podgląd” i menu): osobna zakładka bez terminala, nie zapamiętywana po restarcie
 - [x] **Kontekst taska w sesji** (tylko sesje utworzone z taska, `groups.fromTask`): przy każdym starcie i wznowieniu `claude … --append-system-prompt "<ID, tytuł, link, instrukcja: szczegóły przez MCP ClickUp, gdy potrzebne>"`. Wsparcie flagi wykrywane raz z `claude --help`; bez niej — awaryjnie wpisanie `DEV-123 ` w pole promptu nowej sesji (bez wysyłania)
 - [x] **„Zacznij od pobrania taska”** (checkbox w oknie Nowa sesja z taska, domyślnie wyłączony): pierwszy prompt „Pobierz przez MCP ClickUp task DEV-123 … i streść, co jest do zrobienia” (zużywa limit)
-- [ ] **Test użytkownika** (macOS): `npm install` (nowe zależności `marked`, `dompurify`), podgląd prawdziwego taska z załącznikami, sesja z taska z kontekstem i z pierwszym promptem
+- [x] **Test użytkownika** (macOS): kontekst taska i pierwszy prompt działają, `claude caps: appendSystemPrompt=true`
+- [x] Obrazki w opisie taska wyświetlały się jako linki: oryginały z `*.clickup-attachments.com` zwracają HTML (logowanie). Poprawka: ponowienie z tokenem, potem miniatura dopasowanego załącznika — potwierdzone u użytkownika
 
 ### Etap 7 — Usage (limity planu)
 - [ ] Odczyt tokenu OAuth: macOS z Keychain (`security find-generic-password …`, do weryfikacji nazwa wpisu), Windows z `~/.claude/.credentials.json`

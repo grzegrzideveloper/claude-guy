@@ -133,6 +133,16 @@ async function getTaskDetail(token, key, teamId) {
   };
 }
 
+function sniffImage(b) {
+  if (b.length < 12) return null;
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+  if (b.toString('latin1', 0, 4) === 'GIF8') return 'image/gif';
+  if (b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP') return 'image/webp';
+  if (b[0] === 0x42 && b[1] === 0x4d) return 'image/bmp';
+  return null;
+}
+
 // Attachment / image bytes for the renderer (which can't load remote images under its CSP).
 // Only ClickUp hosts. Tries without the token first; sends it only to ClickUp's own attachment hosts.
 const ATTACH_HOST = /(^|\.)(clickup-attachments\.com|clickup\.com|clickupusercontent\.com)$/i;
@@ -143,14 +153,18 @@ async function fetchAttachment(token, url, maxBytes = 15 * 1024 * 1024) {
   if (!testHost && (u.protocol !== 'https:' || !ATTACH_HOST.test(u.hostname))) throw new ClickUpError('Załącznik spoza ClickUp.', 0);
   const get = async withToken => fetch(u, { headers: withToken ? { Authorization: token } : {}, redirect: 'follow' });
   let res = await get(false);
-  if (res.status === 401 || res.status === 403) res = await get(true);
+  // Without a session ClickUp may answer 401/403 or 200 with an HTML sign-in page: retry with the token.
+  const isHtml = r => (r.headers.get('content-type') || '').toLowerCase().startsWith('text/html');
+  if (res.status === 401 || res.status === 403 || (res.ok && isHtml(res))) res = await get(true);
   if (!res.ok) throw new ClickUpError(`Nie udało się pobrać załącznika (${res.status}).`, res.status);
   const len = Number(res.headers.get('content-length') || 0);
   if (len > maxBytes) throw new ClickUpError('Załącznik jest za duży do podglądu.', 413);
   const buf = Buffer.from(await res.arrayBuffer());
   if (buf.length > maxBytes) throw new ClickUpError('Załącznik jest za duży do podglądu.', 413);
-  const type = (res.headers.get('content-type') || 'application/octet-stream').split(';')[0].trim();
-  return { type, dataUrl: `data:${type};base64,${buf.toString('base64')}` };
+  // Original attachments often come as application/octet-stream (thumbnails as image/*): trust the bytes.
+  const header = (res.headers.get('content-type') || 'application/octet-stream').split(';')[0].trim();
+  const type = sniffImage(buf) || header;
+  return { type, headerType: header, host: u.hostname, dataUrl: `data:${type};base64,${buf.toString('base64')}` };
 }
 
 // One task by key: a custom id like DEV-123 (needs team_id) or a raw ClickUp id.

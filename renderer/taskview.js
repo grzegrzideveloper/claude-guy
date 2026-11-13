@@ -87,7 +87,7 @@ const TaskView = {
     const md = el('div', 'tv-md');
     if (t.markdown && t.markdown.trim()) {
       md.innerHTML = this.toSafeHtml(t.markdown); // sanitized by DOMPurify
-      this.wireContent(md);
+      this.wireContent(md, t.attachments);
     } else {
       md.append(el('div', 'muted', 'Brak opisu.'));
     }
@@ -157,8 +157,17 @@ const TaskView = {
     });
   },
 
+  // Fallbacks for an image URL: originals may need a ClickUp sign-in, thumbnails don't. Match the inline image
+  // to a task attachment by a long path segment (the attachment's uuid) and use that attachment's thumbnail.
+  thumbsFor(url, attachments = []) {
+    let segs = [];
+    try { segs = new URL(url).pathname.split('/').filter(x => x.length >= 16); } catch { return []; }
+    const hits = attachments.filter(a => segs.some(sg => `${a.url || ''} ${a.thumb || ''} ${a.id}`.includes(sg) || sg.includes(a.id)));
+    return hits.map(a => a.thumb).filter(Boolean);
+  },
+
   // Links → system browser (https only). Images → loaded via main.
-  wireContent(root) {
+  wireContent(root, attachments = []) {
     for (const a of root.querySelectorAll('a')) {
       const href = a.getAttribute('href') || '';
       a.removeAttribute('target');
@@ -170,20 +179,31 @@ const TaskView = {
       img.removeAttribute('data-src');
       img.classList.add('tv-img', 'loading');
       img.alt = img.alt || 'obraz';
-      this.loadImage(src, img);
+      this.loadImage(src, img, null, this.thumbsFor(src, attachments));
     }
   },
 
-  async loadImage(url, img, onFail) {
-    // main decides what may be fetched (https + ClickUp hosts only); here just skip obvious junk
+  // First image data: URL among the candidates, or null.
+  async fetchImage(urls) {
+    for (const u of urls) {
+      // main decides what may be fetched (https + ClickUp hosts only); here just skip obvious junk
+      if (!/^https?:\/\//i.test(u || '')) continue;
+      const r = await api.clickupAttachment(u);
+      if (r.ok && r.type.startsWith('image/') && r.type !== 'image/svg+xml') return r.dataUrl;
+    }
+    return null;
+  },
+
+  async loadImage(url, img, onFail, fallbacks = []) {
     if (!/^https?:\/\//i.test(url || '')) { img.replaceWith(el('span', 'muted', '[obraz]')); return; }
-    const r = await api.clickupAttachment(url);
-    if (r.ok && r.type.startsWith('image/') && r.type !== 'image/svg+xml') {
-      img.src = r.dataUrl;
+    const data = await this.fetchImage([url, ...fallbacks]);
+    if (data) {
+      img.src = data;
       img.classList.remove('loading');
-      img.onclick = () => this.lightbox(r.dataUrl);
+      img.onclick = () => this.lightbox(data);
       return;
     }
+    const r = {};
     if (onFail) { onFail(r); return; }
     const a = el('a', 'tv-link', '[obraz — otwórz w przeglądarce]');
     a.href = '#';
@@ -200,10 +220,10 @@ const TaskView = {
       card.append(img);
       this.loadImage(a.thumb || a.url, img, () => img.replaceWith(el('div', 'tv-ext', a.ext || 'img')));
       card.onclick = async () => {
-        if (!a.url) return;
-        const r = await api.clickupAttachment(a.url);
-        if (r.ok && r.type.startsWith('image/') && r.type !== 'image/svg+xml') this.lightbox(r.dataUrl, a.title);
-        else api.openExternal(a.url);
+        // full size if ClickUp gives it to us, otherwise the large thumbnail, otherwise the browser
+        const data = await this.fetchImage([a.url, a.thumb]);
+        if (data) this.lightbox(data, a.title);
+        else if (a.url) api.openExternal(a.url);
       };
     } else {
       card.append(el('div', 'tv-ext', a.ext || 'plik'));
