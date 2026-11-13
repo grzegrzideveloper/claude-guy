@@ -28,7 +28,8 @@ Plan i stan prac: `PLAN.md` (aktualizuj checkboxy po każdym kroku). Dokumentacj
 | `src/store.js` | Atomowy odczyt/zapis JSON w `app.getPath('userData')` |
 | `src/pty.js` | Jeden PTY na zakładkę (`@lydell/node-pty`) |
 | `src/usage.js` | (etap 3) limity planu |
-| `src/clickup.js` | (etap 4) REST ClickUp |
+| `src/clickup.js` | REST ClickUp v2 z osobistym tokenem (nagłówek `Authorization: <token>` bez „Bearer”): `getUser`, `getTeams`, `getMyTasks` (`/team/{id}/task?assignees[]=…&include_closed=false&subtasks=true`, strony po 100, odfiltrowane `hiddenStatuses`, domyślnie `closed`) |
+| `src/secrets.js` | Sekrety (token ClickUp) zaszyfrowane `safeStorage` w `secrets.bin`. Tylko main |
 | `src/hubstaff.js` | (etap 5) czas pracy |
 | `renderer/` | `index.html`, `style.css` i zwykłe skrypty (bez ES modules, kolejność w `index.html`): `util.js` (`$`, `el`, `relTime`), `menu.js` (`CtxMenu`), `toast.js` (`Toasts`), `groups.js` (`Groups`, `PALETTE` — model grup), `dialogs.js` (`Dialogs`: `promptName`, `statusEditor`, `manageStatuses`, `newSession`, `askCloseTab`, `settings`; jedno okno naraz — otwarcie nowego porzuca poprzednie), `sidebar.js` (`Sidebar`), `tabs.js` (`Tabs`), `app.js` (`App`, start). xterm i fit addon jako UMD z `../node_modules` (globalne `Terminal`, `FitAddon.FitAddon`) |
 | `scripts/screenshot.js` | Off-screen render prawdziwego UI do PNG |
@@ -39,14 +40,15 @@ Plan i stan prac: `PLAN.md` (aktualizuj checkboxy po każdym kroku). Dokumentacj
 - terminale: `pty:write`, `pty:resize`, `pty:kill`
 - system: `open:external`, `clipboard:read`, `clipboard:write`, `app:info` (platforma, wersja)
 - main → renderer: `pty:data`, `pty:exit`, `sessions:changed`
-- (etap 3+) `usage:get`, `clickup:*`, `hubstaff:*`
+- ClickUp: `clickup:status` (bez tokenu: `configured`, user, workspace), `clickup:connect(token)` (weryfikuje, trzyma token w pamięci main), `clickup:save({ teamId })` (zapisuje token do `secrets`, user/workspace do `settings.clickup`), `clickup:disconnect`, `clickup:tasks({ force })` (cache 2 min w `clickup-tasks.json`, równoległe wywołania dołączają do trwającego)
+- (później) `usage:get`, `hubstaff:*`
 
 ### Pliki danych (`userData`)
 | Plik | Zawartość |
 |---|---|
 | `groups.json` | `{ statuses: [{ id, name, color, builtin? }], assignments: { sessionId: 'status:<id>' }, titles: { sessionId: name }, collapsed: { key: bool }, ui: { tab }, v3?: true }`. `Groups.normalize()` uzupełnia wbudowane statusy i migruje starsze formaty; `v3` = jednorazowe porządkowanie już zrobione |
 | `tabs.json` | `{ tabs: [{ sessionId, cwd }], active }` |
-| `settings.json` | `{ runtime: 'native', taskPrefix: 'DEV', clickupWorkspaceId, clickup: { userId, groupBy: 'folder>list' } }` (bez sekretów; `clickup.*` od etapu 4). Edytowane w oknie Ustawienia (`Dialogs.settings`); main waliduje `taskPrefix` |
+| `settings.json` | `{ runtime, taskPrefix, clickupWorkspaceId, onboarding: { clickupAsked }, folders: { list: { listId: cwd }, folder: { folderId: cwd } }, clickup: { userId, username, email, teamId, teamName, hiddenStatuses } }`. Bez sekretów. `clickup` zapisuje wyłącznie main (przy `store:save('settings')` z renderera main nadpisuje go wartością z dysku) |
 | `secrets.bin` | Tokeny ClickUp/Hubstaff zaszyfrowane `safeStorage`. Czyta tylko main |
 | `clickup-tasks.json` | Cache „Moich tasków” (bez tokenu) |
 
@@ -69,7 +71,7 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
 - Klawisze: macOS — Cmd+C/V z menu Edit (xterm obsługuje zdarzenia copy/paste), Ctrl+C przerywa, Ctrl+V idzie do `claude` (wklejanie obrazka). Windows — `attachCustomKeyEventHandler`: Ctrl+C kopiuje przy zaznaczeniu, Ctrl+Shift+C kopiuje, Ctrl+V/Ctrl+Shift+V wkleja przez `clipboard:read` (z `preventDefault`, inaczej podwójne wklejenie), obrazek → `ESC v` (Alt+V, do weryfikacji). Prawy klik: kopiuj zaznaczenie albo wklej.
 
 ### Sidebar i grupowanie (`renderer/sidebar.js`, `groups.js`)
-- Trzy zakładki (`App.groups.ui.tab`): **Sesje** (`renderSessions`), **Taski** (`renderTasks`, etap 4; teraz placeholder), **Historia** (`renderHistory`: płaska lista wszystkich wczytanych sesji, pełna data). Filtr jest wspólny, placeholder zależy od zakładki.
+- Trzy zakładki (`App.groups.ui.tab`): **Sesje** (`renderSessions`), **Taski** (`renderTasks`, niżej), **Historia** (`renderHistory`: płaska lista wszystkich wczytanych sesji, pełna data). Filtr jest wspólny, placeholder zależy od zakładki.
 - **Grupy są automatyczne:** `Groups.keyOf(s)` = `task:DEV-123` (z własnej nazwy, pierwszego promptu albo gałęzi) albo `project:<nazwa>`. Ręcznie nie przenosi się sesji między grupami.
 - **Status to cecha sesji:** `assignments[sessionId] = 'status:<id>'`, `Groups.statusOf(s)` zwraca status albo `null` („bez statusu”). Wbudowane `in_progress` i `completed` (nie do usunięcia), reszta własna (`s_<losowe>`), zarządzana w oknie Statusy (`Dialogs.manageStatuses`).
 - **Completed:** grupa, w której *wszystkie* sesje mają `completed` (`Groups.isDone`), idzie do zwiniętej sekcji `sec:completed` na dole. Wznowienie sesji ustawia `in_progress`, więc grupa wraca do „W toku”.
@@ -84,10 +86,18 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
 - Sesja z zakładki bez transkryptu: `Tabs.sessionOf()` zwraca stub; status i nazwa działają po ID.
 - `sessions:list` wczytuje do 500 sesji (Historia).
 
+### ClickUp (`renderer/app.js`, `sidebar.js`, `dialogs.js`)
+- Pierwsze uruchomienie: `App.onboarding()` raz pyta „Skonfigurować ClickUp?” (`settings.onboarding.clickupAsked`); potem tylko z Ustawień.
+- `Dialogs.clickupSetup()`: token (pole `password`) → `clickup:connect` → „Połączono jako …” + wybór workspace'u → `clickup:save`. Pole tokenu jest czyszczone po weryfikacji; renderer nigdy nie dostaje tokenu z main.
+- `App.clickup = { status, tasks, fetchedAt, error, loading }`; `App.loadClickup({ force })` przy starcie (cache), co 10 min i przyciskiem ↻.
+- Zakładka Taski: drzewo Folder → Lista (lista bez folderu = grupa najwyższego poziomu), sortowane wg ostatniej zmiany; klucze zwinięcia `cu:f:<id>`, `cu:l:<id>`. Wiersz: `DEV-…`, nazwa, status (kolor z ClickUp), priorytet, liczba sesji, termin (czerwony po terminie). Kliknięcie rozwija (`Sidebar.expandedTask`): + Nowa sesja, Otwórz w ClickUp, sesje tego taska. Prawy klik: menu z tymi akcjami + kopiowanie ID/linku.
+- `App.newSessionFromTask(t)`: nazwa `DEV-123 <tytuł>`, folder z `App.suggestFolder(t)` (lista → sesja tego taska → folder ClickUp), po utworzeniu `App.rememberFolder`. Użytkownik zawsze zatwierdza folder.
+- `App.cuTask(key)` łączy grupę sesji z taskiem: nagłówek grupy pokazuje nazwę z ClickUp, menu grupy otwiera nową sesję przez `newSessionFromTask`.
+
 ## Zasady
 - **Apka jest dla wielu osób.** Żadnych nazw firmy, ID workspace'ów, userów, ścieżek ani prefiksów na sztywno w kodzie. Wszystko z ustawień albo wykrywane (np. user i workspace z API ClickUp).
 - **Zero tokenów w sidebarze.** Wszystko z lokalnego parsowania. Żadnego `claude -p` ani API Anthropic do budowania listy. Wywołania zużywające limit tylko na wyraźne kliknięcie.
-- **Sekrety tylko w main.** Token OAuth Claude'a, tokeny ClickUp i Hubstaff: nigdy w logach, IPC, plikach JSON ani w kodzie. Tokeny ClickUp/Hubstaff zapisujemy przez `safeStorage` (Keychain / DPAPI).
+- **Sekrety tylko w main.** Token OAuth Claude'a, tokeny ClickUp i Hubstaff: nigdy w logach, plikach JSON, kodzie ani w kierunku main → renderer. Jedyny wyjątek: token ClickUp wpisany przez użytkownika idzie raz renderer → main (`clickup:connect`). Zapis przez `safeStorage` (`src/secrets.js`). Nie proś użytkownika o wklejanie tokenów w czacie.
 - Renderer: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. Nowe możliwości = handler IPC w `main.js` + metoda w `preload.js`.
 - Tytuły sesji, własne nazwy, nazwy kategorii i dane z ClickUp to treść użytkownika: tylko `textContent`, nigdy `innerHTML`.
 - `open:external` przyjmuje tylko `https:`.
@@ -107,6 +117,8 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
 - **Układ:** `#app` to grid z `grid-template-rows: minmax(0, 1fr)`, a `#sidebar`/`#main` mają `min-height: 0`. Bez tego długa lista sesji rozpycha wiersz ponad okno: sidebar przestaje się przewijać, a terminal dopasowuje się do zawyżonej wysokości i ucina dół. Każdy nowy kontener flex/grid z przewijaną zawartością potrzebuje `min-height: 0`.
 - **Padding terminala** ustawiamy na `.xterm`, nie na `.term`: FitAddon odejmuje padding elementu terminala, ale nie rodzica, więc padding na rodzicu daje o jeden wiersz za dużo i prompt wystaje poza okno.
 - **Paski przewijania** są stylowane `::-webkit-scrollbar`, więc widać je zawsze (macOS domyślnie ukrywa nakładkowe paski).
+- **Kolizje nazw klas CSS:** style są globalne. Klasa `.empty` (pełnoekranowy stan „Brak otwartej sesji”) dodana do pola ścieżki w oknie Nowa sesja rozciągnęła je na całe okno i zasłoniła UI. Ogólnych nazw (`empty`, `active`, `open`, `hidden`) używaj tylko z prefiksem komponentu albo selektorem zawężonym (`#empty.empty`). Testy zrzutami muszą obejmować też stany puste (np. dialog bez podpowiedzi folderu).
+- **Diagnostyka na żywo:** Cmd+Option+I / Ctrl+Shift+I / F12 otwiera DevTools, Cmd/Ctrl+Shift+R przeładowuje UI (zabija PTY, zakładki wracają przez `--resume`). Skróty sprawdzają `input.code` (`KeyI`), bo na macOS Option zmienia znak. Ostrzeżenia i błędy renderera trafiają do logu (`console-message`).
 - **Glify** spoza fontów systemowych (np. ⧉) renderują się jako puste prostokąty. Ikony robimy inline SVG.
 - **`fs.watch` recursive** działa natywnie na macOS i Windows. Pod runtime `wsl` (`\\wsl$`) będzie potrzebny polling.
 
@@ -117,6 +129,7 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
   - Tryb headless (`--claude-gui-headless`) nie przywraca ani nie zapisuje zakładek i nie spawnuje `claude`.
   - Testy zapisujące stan: ustaw `CLAUDE_GUI_DATA_DIR` na kopię danych, żeby nie nadpisać prawdziwych.
   - Sztuczne sesje: `CLAUDE_CONFIG_DIR=/tmp/fk` z plikami `/tmp/fk/projects/<dir>/<uuid>.jsonl`.
+  - ClickUp bez prawdziwego API: lokalna atrapa (node http) i `CLICKUP_API_BASE=http://127.0.0.1:<port>/api/v2`; na Linuksie bez keyringa `CLAUDE_GUI_INSECURE_SECRETS=1`. Obie zmienne tylko do testów.
   - Terminal w zrzucie: `CLAUDE_GUI_SHOT_SPAWN=1` + `PATH` z atrapą `claude` (skrypt wypisujący argumenty i `exec bash`), np. `SHOT_JS="Tabs.open(App.sessions[0]); new Promise(r=>setTimeout(r,1500)).then(()=>0)"`.
 - `node -e "console.log(require('./src/sessions').listSessions(5))"`.
 - Prawdziwy test robi użytkownik: `npm start` na Macu i na Windowsie.

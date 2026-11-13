@@ -137,9 +137,10 @@ const Tabs = {
   },
 
   // opts: { cwd, name } suggestions (from a group or, later, a ClickUp task). The user always confirms the folder.
+  // Resolves to { id, cwd } or null.
   async newSession(opts = {}) {
     const r = await Dialogs.newSession(opts);
-    if (!r) return;
+    if (!r) return null;
     const id = await api.newSessionId();
     if (r.name) App.groups.titles[id] = r.name;
     App.groups.assignments[id] = 'status:in_progress';
@@ -147,6 +148,7 @@ const Tabs = {
     const t = this.create({ id, cwd: r.cwd, isNew: true });
     this.activate(id);
     this.start(t);
+    return { id, cwd: r.cwd };
   },
 
   activate(id) {

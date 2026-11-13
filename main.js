@@ -8,6 +8,8 @@ const platform = require('./src/platform');
 const store = require('./src/store');
 const sessions = require('./src/sessions');
 const pty = require('./src/pty');
+const secrets = require('./src/secrets');
+const clickup = require('./src/clickup');
 const { getRuntime } = require('./src/runtime');
 
 const HEADLESS = process.env.CLAUDE_GUI_HEADLESS === '1' || process.argv.includes('--claude-gui-headless');
@@ -18,6 +20,7 @@ const SHOT_SPAWN = !!SHOT && process.env.CLAUDE_GUI_SHOT_SPAWN === '1';
 app.setName('claude-gui');
 app.setPath('userData', process.env.CLAUDE_GUI_DATA_DIR || path.join(app.getPath('appData'), 'claude-gui'));
 store.init(app.getPath('userData'));
+secrets.init(store.dir);
 
 const logFile = path.join(store.dir, 'claude-gui.log');
 function log(...a) {
@@ -81,7 +84,34 @@ function main() {
       if (platform.isHttpsUrl(url)) shell.openExternal(url);
       return { action: 'deny' };
     });
-    win.webContents.on('will-navigate', e => e.preventDefault());
+    win.webContents.on('will-navigate', (e, url) => { log(`blocked navigation: ${url}`); e.preventDefault(); });
+
+    // Diagnostics: renderer warnings/errors and crashes go to the log.
+    // Single-argument listener: Electron passes an event object with level/message/lineNumber/sourceId
+    // (declaring the old positional arguments prints a deprecation warning).
+    win.webContents.on('console-message', d => {
+      if (d.level === 'warning' || d.level === 'error') log(`renderer ${d.level}: ${d.message} (${path.basename(String(d.sourceId || ''))}:${d.lineNumber})`);
+    });
+    win.webContents.on('render-process-gone', (_e, details) => log(`renderer gone: ${details.reason} (${details.exitCode})`));
+    win.webContents.on('did-fail-load', (_e, code, desc, url) => log(`load failed: ${code} ${desc} ${url}`));
+
+    // Cmd+Option+I / Ctrl+Shift+I / F12: DevTools. Cmd/Ctrl+Shift+R: reload the UI (terminals keep running in main;
+    // restored tabs re-attach by restarting claude --resume).
+    win.webContents.on('before-input-event', (e, input) => {
+      if (input.type !== 'keyDown') return;
+      // input.code (physical key), not input.key: on macOS Option changes the character (Option+I gives "ˆ").
+      const k = input.code;
+      const mod = platform.isMac ? input.meta : input.control;
+      if (k === 'F12' || (k === 'KeyI' && ((platform.isMac && input.meta && input.alt) || (!platform.isMac && input.control && input.shift)))) {
+        e.preventDefault();
+        win.webContents.toggleDevTools();
+      } else if (k === 'KeyR' && mod && input.shift) {
+        e.preventDefault();
+        log('ui reload (shortcut)');
+        pty.killAll();
+        win.webContents.reload();
+      }
+    });
     win.on('closed', () => { win = null; });
     win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
     if (SHOT) win.webContents.once('did-finish-load', takeScreenshot);
@@ -155,8 +185,107 @@ function main() {
   ipcMain.handle('store:save', (_e, name, data) => {
     if (!STORE_NAMES.has(name)) throw new Error('unknown store');
     if (name === 'tabs' && (HEADLESS || quitting)) return false; // PTYs dying at shutdown must not empty the list
+    if (name === 'settings') {
+      // `clickup` (user, workspace) is owned by main; the renderer can't overwrite it.
+      const cur = store.load('settings', {});
+      data = { ...data, clickup: cur.clickup || null };
+    }
     store.save(name, data);
     return true;
+  });
+
+  // --- ClickUp (token stays in main) ---
+  let pendingToken = null; // verified by clickup:connect, written by clickup:save
+  let pendingTeams = [];
+  let cuInflight = null;
+  const cuSettings = () => store.load('settings', {}).clickup || null;
+  const cuToken = () => secrets.get('clickupToken');
+  const errOut = err => ({ ok: false, error: err.message || String(err), status: err.status || 0 });
+
+  ipcMain.handle('clickup:status', () => {
+    const c = cuSettings();
+    return {
+      secureStorage: secrets.available(),
+      configured: !!(cuToken() && c && c.teamId && c.userId),
+      user: c ? { username: c.username, email: c.email } : null,
+      teamId: c ? c.teamId : null,
+      teamName: c ? c.teamName : null,
+    };
+  });
+
+  ipcMain.handle('clickup:connect', async (_e, token) => {
+    token = String(token || '').trim();
+    if (!token) return { ok: false, error: 'Wklej token API.' };
+    if (!secrets.available()) return { ok: false, error: 'System nie udostępnia bezpiecznego magazynu haseł, więc token nie może zostać zapisany.' };
+    try {
+      const user = await clickup.getUser(token);
+      const teams = await clickup.getTeams(token);
+      if (!teams.length) return { ok: false, error: 'To konto nie ma dostępu do żadnego workspace\u2019u.' };
+      pendingToken = token;
+      pendingTeams = teams;
+      log(`clickup: connected as user ${user.id}, ${teams.length} workspace(s)`);
+      return { ok: true, user: { username: user.username, email: user.email }, teams, userId: user.id };
+    } catch (err) {
+      log(`clickup connect failed: ${err.message}`);
+      return errOut(err);
+    }
+  });
+
+  ipcMain.handle('clickup:save', async (_e, { teamId }) => {
+    if (!pendingToken) return { ok: false, error: 'Najpierw połącz się z ClickUp.' };
+    const team = pendingTeams.find(t => t.id === String(teamId));
+    if (!team) return { ok: false, error: 'Wybierz workspace.' };
+    try {
+      const user = await clickup.getUser(pendingToken);
+      secrets.set('clickupToken', pendingToken);
+      const st = store.load('settings', {});
+      const prev = st.clickup || {};
+      st.clickup = {
+        userId: user.id, username: user.username, email: user.email,
+        teamId: team.id, teamName: team.name,
+        hiddenStatuses: prev.hiddenStatuses || ['closed'],
+      };
+      st.clickupWorkspaceId = team.id;
+      store.save('settings', st);
+      store.save('clickup-tasks', { tasks: [], fetchedAt: null });
+      pendingToken = null;
+      pendingTeams = [];
+      return { ok: true };
+    } catch (err) {
+      return errOut(err);
+    }
+  });
+
+  ipcMain.handle('clickup:disconnect', () => {
+    secrets.set('clickupToken', null);
+    const st = store.load('settings', {});
+    st.clickup = null; // keep clickupWorkspaceId: links to tasks still work
+    store.save('settings', st);
+    store.save('clickup-tasks', { tasks: [], fetchedAt: null });
+    return { ok: true };
+  });
+
+  // Cached for 2 minutes unless force. A second call while fetching joins the running one.
+  ipcMain.handle('clickup:tasks', async (_e, { force = false } = {}) => {
+    const c = cuSettings();
+    const token = cuToken();
+    const cache = store.load('clickup-tasks', { tasks: [], fetchedAt: null });
+    if (!token || !c || !c.teamId) return { configured: false, tasks: [], fetchedAt: null };
+    if (!force && cache.fetchedAt && Date.now() - cache.fetchedAt < 2 * 60 * 1000) return { configured: true, ...cache };
+    if (!cuInflight) {
+      cuInflight = clickup.getMyTasks(token, { teamId: c.teamId, userId: c.userId, hiddenStatuses: c.hiddenStatuses || ['closed'] })
+        .then(tasks => {
+          const data = { tasks, fetchedAt: Date.now() };
+          store.save('clickup-tasks', data);
+          return { configured: true, ...data };
+        })
+        .catch(err => {
+          log(`clickup tasks failed: ${err.message}`);
+          return { configured: true, ...cache, error: err.message, errorStatus: err.status || 0 };
+        })
+        .finally(() => { cuInflight = null; });
+    }
+    return cuInflight;
   });
 
   ipcMain.handle('session:pickFolder', async () => {

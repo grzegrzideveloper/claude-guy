@@ -127,7 +127,8 @@ button { font: inherit; color: inherit; }
 .term .xterm { height: 100%; padding: 6px 0 6px 8px; background: var(--bg); }
 .term .xterm .xterm-viewport { background-color: var(--bg) !important; }
 
-.empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--muted); }
+/* `.empty` is the full-screen "no open session" state — don't reuse the class name elsewhere */
+#empty.empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--muted); }
 .empty-title { font-size: 16px; color: var(--text); }
 .empty-warn { margin-top: 12px; color: var(--danger); }
 
@@ -160,6 +161,30 @@ button { font: inherit; color: inherit; }
 .ctx-head { padding: 6px 10px 3px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .ctx-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 
+/* ClickUp tasks tab */
+.cu-bar { display: flex; align-items: center; gap: 8px; padding: 6px 6px 8px; }
+.cu-bar-title { font-weight: 600; flex: 1; }
+.cu-bar-time { color: var(--muted); font-size: 11px; }
+.cu-refresh { font-size: 15px; width: 26px; height: 26px; }
+.cu-refresh.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.cu-error { margin: 0 6px 8px; padding: 8px 10px; border-radius: 6px; background: #f8514922; color: #ffaba8; font-size: 12px; }
+.cu-head.lvl0 { font-weight: 600; }
+.cu-head.lvl1 { margin-left: 10px; font-weight: 500; color: #cfcfcf; }
+.cu-task { padding: 6px 8px; margin: 1px 0; border-radius: 6px; cursor: pointer; border-left: 3px solid transparent; }
+.cu-task.ind1 { margin-left: 10px; }
+.cu-task.ind2 { margin-left: 20px; }
+.cu-task:hover { background: var(--hover); }
+.cu-task.expanded { background: var(--panel2); border-left-color: var(--task); }
+.cu-id { flex-shrink: 0; font-size: 11px; color: #c9c1ff; background: #7b68ee33; border-radius: 4px; padding: 0 5px; font-variant-numeric: tabular-nums; }
+.cu-status { font-size: 10px; text-transform: uppercase; letter-spacing: .03em; padding: 0 5px; border-radius: 4px; border: 1px solid; white-space: nowrap; }
+.cu-prio { white-space: nowrap; }
+.cu-sessions { white-space: nowrap; color: var(--accent); }
+.s-time.overdue { color: var(--danger); }
+.cu-actions { display: flex; gap: 6px; margin-top: 8px; }
+.cu-sesslist { margin-top: 6px; border-top: 1px solid var(--border); padding-top: 4px; }
+.cu-sesslist .session { padding: 4px 6px; }
+
 /* toasts */
 #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 120; display: flex; flex-direction: column; gap: 8px; max-width: 420px; }
 .toast {
@@ -179,6 +204,18 @@ button { font: inherit; color: inherit; }
 .dialog-input:focus { border-color: var(--accent); }
 .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .dialog-label { font-size: 12px; color: var(--muted); margin: 12px 0 6px; }
+.dialog-text { line-height: 1.45; margin-bottom: 8px; }
+.dialog-steps { margin: 4px 0 10px; padding-left: 20px; line-height: 1.6; color: #cfcfcf; }
+.dialog-section { margin: 16px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.dialog-section:first-of-type { margin-top: 8px; }
+.dialog-status { margin-top: 8px; font-size: 12px; color: var(--muted); min-height: 16px; }
+.dialog-status.ok { color: #3fb950; }
+.dialog-status.error { color: var(--danger); }
+select.dialog-input { appearance: auto; }
+.cu-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+.cu-info { flex: 1; min-width: 0; line-height: 1.4; }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: .5; cursor: default; }
 .dialog-error { color: var(--danger); font-size: 12px; min-height: 0; margin-top: 8px; }
 .dialog-error:empty { display: none; }
 .dialog .dialog-input + .dialog-hint { margin-top: 6px; }
@@ -200,7 +237,7 @@ button { font: inherit; color: inherit; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left;
 }
 .folder-path > span { direction: ltr; unicode-bidi: embed; }
-.folder-path.empty { color: var(--muted); direction: ltr; }
+.folder-path.unset { color: var(--muted); direction: ltr; }
 .st-list { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; }
 .st-row { display: flex; align-items: center; gap: 8px; padding: 6px 6px; border-radius: 6px; }
 .st-row:hover { background: var(--hover); }

@@ -18,7 +18,7 @@ npm start
 ## Co już działa
 
 ### Sidebar
-Na górze trzy zakładki: **Sesje**, **Taski** (lista tasków z ClickUp, w przygotowaniu) i **Historia**.
+Na górze trzy zakładki: **Sesje**, **Taski** (Twoje taski z ClickUp) i **Historia**.
 
 **Sesje:**
 - Na górze **Ostatnie** (3 ostatnio używane), niżej **W toku**: sesje pogrupowane automatycznie wg taska `DEV-…` (z nazwy sesji, pierwszego promptu albo gałęzi git), a bez taska wg projektu (folderu).
@@ -32,6 +32,8 @@ Na górze trzy zakładki: **Sesje**, **Taski** (lista tasków z ClickUp, w przyg
 - **Zwijanie:** sekcje i grupy zwijasz kliknięciem w nagłówek, apka to zapamiętuje.
 - **Filtr** szuka po tytule, projekcie, tasku, gałęzi i statusie.
 - **Badge `DEV-…`** otwiera task w ClickUp, gdy w **Ustawieniach** (ikona suwaków) podasz ID workspace'u, czyli liczbę z adresu `app.clickup.com/<ID>/…`.
+
+**Taski:** taski z ClickUp przypisane do Ciebie, bez statusu Closed, pogrupowane wg folderu i listy (np. TimeTax → Speedtax). Przy tasku jest status, priorytet, termin i liczba Twoich sesji. Kliknięcie rozwija **+ Nowa sesja** (nazwa `DEV-123 <tytuł>`, folder podpowiedziany na podstawie poprzednich sesji z tej listy — zawsze go zatwierdzasz), **Otwórz w ClickUp** i listę sesji tego taska. Lista odświeża się co 10 minut albo przyciskiem ↻.
 
 **Historia:** wszystkie sesje (do 500 ostatnich) w jednej liście od najnowszej, z datą i godziną, bez grupowania.
 
@@ -52,6 +54,14 @@ Przy pierwszym uruchomieniu tej wersji apka jednorazowo porządkuje sesje bez st
 | Przerwij Claude'a | Ctrl+C | Ctrl+C (bez zaznaczenia) |
 | Wklej obrazek | Ctrl+V | Ctrl+V (gdy w schowku jest obrazek) |
 | Prawy klik | kopiuje zaznaczenie albo wkleja | jak obok |
+
+## ClickUp
+Przy pierwszym uruchomieniu apka pyta, czy skonfigurować ClickUp (można też później: **Ustawienia → ClickUp → Skonfiguruj…**).
+1. W ClickUp kliknij awatar → **Settings → Apps**, w sekcji **API Token** kliknij **Generate** albo **Copy**.
+2. Wklej token w apce i kliknij **Połącz**. Apka sprawdzi go i pokaże, jako kto jesteś połączony.
+3. Wybierz workspace i **Zapisz**.
+
+Każdy używa własnego tokenu, więc każdy widzi swoje taski. Token jest szyfrowany przez system (Keychain na macOS, mechanizm Windows) i nie opuszcza aplikacji. **Odłącz** w Ustawieniach usuwa go z komputera.
 
 ## Gdzie są dane
 Ustawienia, grupy, zapamiętane zakładki i log (`claude-gui.log`):

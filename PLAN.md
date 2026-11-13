@@ -81,15 +81,17 @@ Zmiana modelu z etapu 2: status nie jest już grupą, do której sesja „wyjeż
 
 ### Etap 4 — ClickUp: zakładka Taski
 Apka ma działać u wielu osób: nic nie jest wpisane na sztywno, każdy podaje własny token.
-- [ ] Ustawienia → ClickUp: osobisty token API (`pk_…`, ClickUp → Settings → Apps), zapisany przez `safeStorage`, nie opuszcza procesu main
-- [ ] Po zapisaniu tokenu: `GET /v2/user` (`userId`), `GET /v2/team` (workspace; przy kilku wybór). Uzupełnia `clickupWorkspaceId`
-- [ ] Pobieranie: `GET /v2/team/{workspaceId}/task?assignees[]={userId}&subtasks=true&include_closed=true`, stronicowanie po 100. Ukrywane statusy: domyślnie dokładnie `Closed` (bez rozróżniania wielkości liter), lista w ustawieniach. Do sprawdzenia na prawdziwych danych, czy `include_closed=false` + filtr nazwy nie jest szybsze (mniej stron)
-- [ ] Cache w `clickup-tasks.json`, odświeżanie ręczne (↻) + co 10 min
-- [ ] Widok: grupy **Folder → Lista** (np. TimeTax → Speedtax). W wierszu: `DEV-…`, nazwa, status (kolor z ClickUp), priorytet, termin, liczba sesji tego taska
-- [ ] Wyszukiwarka; kliknięcie taska rozwija akcje: **+ Sesja**, Otwórz w ClickUp, Pokaż sesje (przełącza na zakładkę Sesje z filtrem)
-- [ ] **Nowa sesja z taska:** dialog z nazwą `DEV-123 <tytuł taska>` (do edycji) i folderem **podpowiedzianym** na podstawie ostatniego folderu użytego dla tej samej listy ClickUp (fallback: ten sam folder ClickUp). Użytkownik zawsze zatwierdza albo zmienia folder, apka nie wybiera sama. Sesja startuje ze statusem In progress
-- [ ] Nagłówki grup taska w zakładce Sesje pokazują tytuł z ClickUp (zamiast tytułu najnowszej sesji)
-- [ ] Brak tokenu / 401: komunikat z instrukcją; reszta apki działa
+- [x] **Pierwsze uruchomienie:** okienko „Skonfigurować ClickUp?” (Tak / Nie teraz), potem kreator: token z instrukcją → Połącz (weryfikacja) → wybór workspace'u → Zapisz
+- [x] Ustawienia → ClickUp: osobisty token API (`pk_…`, ClickUp → Settings → Apps), zapisany przez `safeStorage`, nie opuszcza procesu main
+- [x] Po zapisaniu tokenu: `GET /v2/user` (`userId`), `GET /v2/team` (workspace; przy kilku wybór). Uzupełnia `clickupWorkspaceId`
+- [x] Pobieranie: `GET /v2/team/{workspaceId}/task?assignees[]={userId}&subtasks=true&include_closed=true`, stronicowanie po 100. Ukrywane statusy: domyślnie dokładnie `Closed` (bez rozróżniania wielkości liter), lista w ustawieniach. Do sprawdzenia na prawdziwych danych, czy `include_closed=false` + filtr nazwy nie jest szybsze (mniej stron)
+- [x] Cache w `clickup-tasks.json`, odświeżanie ręczne (↻) + co 10 min
+- [x] Widok: grupy **Folder → Lista** (np. TimeTax → Speedtax). W wierszu: `DEV-…`, nazwa, status (kolor z ClickUp), priorytet, termin, liczba sesji tego taska
+- [x] Wyszukiwarka; kliknięcie taska rozwija akcje: **+ Sesja**, Otwórz w ClickUp, Pokaż sesje (przełącza na zakładkę Sesje z filtrem)
+- [x] **Nowa sesja z taska:** dialog z nazwą `DEV-123 <tytuł taska>` (do edycji) i folderem **podpowiedzianym** na podstawie ostatniego folderu użytego dla tej samej listy ClickUp (fallback: ten sam folder ClickUp). Użytkownik zawsze zatwierdza albo zmienia folder, apka nie wybiera sama. Sesja startuje ze statusem In progress
+- [x] Nagłówki grup taska w zakładce Sesje pokazują tytuł z ClickUp (zamiast tytułu najnowszej sesji)
+- [x] Brak tokenu / 401: komunikat z instrukcją; reszta apki działa
+- [x] **Test użytkownika** z prawdziwym ClickUp (macOS) — po poprawce okna Nowa sesja (kolizja klasy `.empty`)
 
 ### Etap 5 — automatyczna zmiana statusu z ClickUp
 - [ ] Przy każdym odświeżeniu tasków: dla grup z sesjami, które nie są Completed, sprawdź status taska (taski spoza listy otwartych: `GET /v2/task/{id}?custom_task_ids=true&team_id=…`)
@@ -111,6 +113,7 @@ Apka ma działać u wielu osób: nic nie jest wpisane na sztywno, każdy podaje 
 - [ ] Wariant C: runtime `wsl` (`wsl.exe -e claude`, transkrypty z `\\wsl$\…`, polling zamiast `fs.watch`, konwersja ścieżek `wslpath`)
 - [ ] Pakowanie: `electron-builder` (dmg / nsis), ikona, start z Docka / menu Start
 - [ ] Ekran ustawień w UI
+- [ ] `safeStorage`: przejście na API async (`isAsyncEncryptionAvailable`, `encryptStringAsync`, `decryptStringAsync`) — obecne wywołania sync dają ostrzeżenia o deprecjacji w Electron 45
 - [ ] Panel repo / PR
 
 ## Ustalone
