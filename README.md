@@ -15,10 +15,32 @@ npm install
 npm start
 ```
 
-## Co już działa (etap 1)
-- Lista sesji Claude Code: **Ostatnie** (3) i **Wszystkie**, z projektem, taskiem `DEV-…` i czasem ostatniego użycia. Filtr szuka po tytule, projekcie, tasku i gałęzi. Sekcje zwijasz kliknięciem w nagłówek, apka to zapamiętuje.
+## Co już działa
+
+### Sidebar
+Na górze trzy zakładki: **Sesje**, **Taski** (lista tasków z ClickUp, w przygotowaniu) i **Historia**.
+
+**Sesje:**
+- Na górze **Ostatnie** (3 ostatnio używane), niżej **W toku**: sesje pogrupowane automatycznie wg taska `DEV-…` (z nazwy sesji, pierwszego promptu albo gałęzi git), a bez taska wg projektu (folderu).
+- Każda sesja ma **status**, widoczny jako kolorowa kropka z nazwą: **In progress** (ustawiany sam, gdy otwierasz sesję w nowej zakładce albo tworzysz nową), Twoje własne statusy albo **Completed**.
+- Grupa, w której wszystkie sesje są Completed, przechodzi do zwiniętej sekcji **Completed** na dole. Wystarczy otworzyć którąś z jej sesji, żeby wróciła do „W toku”.
+- **Zmiana statusu:** prawy klik na sesji → Status, prawy klik na nagłówku grupy → „Oznacz wszystkie jako…” albo przy zamykaniu zakładki.
+- **Statusy** (przycisk w nagłówku): dodawanie, zmiana nazwy i koloru, kolejność, usuwanie. In progress i Completed można przemianować, ale nie usunąć.
+- **Prawy klik na sesji** (też na zakładce): Otwórz, Zmień nazwę…, Przywróć oryginalną nazwę, Kopiuj ID sesji, Nowa sesja w tym folderze…, Otwórz DEV-… w ClickUp, Status, (na zakładce) Zamknij zakładkę…
+- **Prawy klik na nagłówku grupy:** Nowa sesja dla tego taska / projektu…, Otwórz w ClickUp, Oznacz wszystkie jako…
+- **Zmiana nazwy** działa tylko w apce, transkrypt Claude'a się nie zmienia. Wpisanie `DEV-123` w nazwę przypisuje sesję do tego taska.
+- **Zwijanie:** sekcje i grupy zwijasz kliknięciem w nagłówek, apka to zapamiętuje.
+- **Filtr** szuka po tytule, projekcie, tasku, gałęzi i statusie.
+- **Badge `DEV-…`** otwiera task w ClickUp, gdy w **Ustawieniach** (ikona suwaków) podasz ID workspace'u, czyli liczbę z adresu `app.clickup.com/<ID>/…`.
+
+**Historia:** wszystkie sesje (do 500 ostatnich) w jednej liście od najnowszej, z datą i godziną, bez grupowania.
+
+Przy pierwszym uruchomieniu tej wersji apka jednorazowo porządkuje sesje bez statusu: otwarte i używane w ostatnich 2 dniach dostają In progress, starsze Completed. Powiadomienie w rogu ma przycisk **Cofnij**.
+
+### Zakładki
 - Kliknięcie sesji otwiera ją w zakładce (`claude --resume`). Jeśli już jest otwarta, przełącza na nią.
-- **+ Nowa**: wybierasz folder, potem nazwę (**Utwórz**), **Pomiń** (nazwą będzie pierwszy prompt) albo **Anuluj**.
+- **+ Nowa** otwiera okno z folderem (**Wybierz…** / **Zmień…**) i opcjonalną nazwą; pusta nazwa = pierwszy prompt. Z menu grupy lub sesji folder i `DEV-…` są podpowiedziane, ale zawsze je zatwierdzasz.
+- **×** na zakładce (albo środkowy przycisk myszy) pyta o status sesji. Kliknięcie karty ustawia status i zamyka, **Zamknij bez zmiany** (Enter) tylko zamyka, **Anuluj** (Esc) zostawia zakładkę.
 - Otwarte zakładki wracają po ponownym uruchomieniu apki. Nowa sesja wraca tylko, jeśli wysłałeś w niej choć jeden prompt.
 - Po wyjściu z Claude'a (`/exit`) zakładka zostaje; **Enter** wznawia sesję.
 

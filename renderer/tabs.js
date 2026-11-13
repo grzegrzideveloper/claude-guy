@@ -41,8 +41,9 @@ const Tabs = {
     close.title = 'Zamknij zakładkę';
     tabEl.append(lab, close);
     tabEl.onclick = () => this.activate(id);
-    tabEl.onauxclick = e => { if (e.button === 1) this.close(id); };
-    close.onclick = e => { e.stopPropagation(); this.close(id); };
+    tabEl.onauxclick = e => { if (e.button === 1) this.requestClose(id); };
+    tabEl.oncontextmenu = e => { e.preventDefault(); App.sessionMenu(this.sessionOf(id), e.clientX, e.clientY, { tabId: id }); };
+    close.onclick = e => { e.stopPropagation(); this.requestClose(id); };
     $('#tabbar').append(tabEl);
 
     const t = { id, cwd, isNew: !!isNew, exited: false, term, fit, el: box, tabEl };
@@ -129,24 +130,21 @@ const Tabs = {
 
   open(s) {
     if (this.tabs.has(s.id)) { this.activate(s.id); return; }
+    Groups.setStatus(s, 'in_progress', { render: false }); // opening in a new tab = working on it now
     const t = this.create({ id: s.id, cwd: s.cwd, isNew: false });
     this.activate(s.id);
     this.start(t);
   },
 
-  async newSession() {
-    const cwd = await api.pickFolder();
-    if (!cwd) return;
-    const name = await Dialogs.promptName({
-      title: 'Nazwa nowej sesji',
-      hint: cwd,
-      placeholder: 'np. DEV-123 formularz B2C',
-      ok: 'Utwórz', skip: 'Pomiń', cancel: 'Anuluj',
-    });
-    if (name === null) return;
+  // opts: { cwd, name } suggestions (from a group or, later, a ClickUp task). The user always confirms the folder.
+  async newSession(opts = {}) {
+    const r = await Dialogs.newSession(opts);
+    if (!r) return;
     const id = await api.newSessionId();
-    if (name) { App.groups.titles[id] = name; App.saveGroups(); }
-    const t = this.create({ id, cwd, isNew: true });
+    if (r.name) App.groups.titles[id] = r.name;
+    App.groups.assignments[id] = 'status:in_progress';
+    App.saveGroups();
+    const t = this.create({ id, cwd: r.cwd, isNew: true });
     this.activate(id);
     this.start(t);
   },
@@ -164,6 +162,25 @@ const Tabs = {
     t.tabEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     this.persist();
     Sidebar.render();
+  },
+
+  // Session for a tab; a stub for a new session whose transcript doesn't exist yet.
+  sessionOf(id) {
+    const s = App.sessionById(id);
+    if (s) return s;
+    const t = this.tabs.get(id);
+    const cwd = t ? t.cwd : '';
+    return { id, title: t ? this.label(t) : id, cwd, project: cwd.split(/[\\/]+/).filter(Boolean).pop() || '?', task: null, mtime: Date.now(), stub: true };
+  },
+
+  // × / middle click: ask where the session goes, then close.
+  async requestClose(id) {
+    if (!this.tabs.has(id)) return;
+    const s = this.sessionOf(id);
+    const r = await Dialogs.askCloseTab(s);
+    if (r === null) { const t = this.tabs.get(id); if (t) t.term.focus(); return; }
+    if (r !== 'close') Groups.setStatus(s, r, { render: false });
+    this.close(id);
   },
 
   close(id) {

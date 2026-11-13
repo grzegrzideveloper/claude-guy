@@ -37,7 +37,11 @@ function main() {
   let quitting = false;
   let claudePath = null;
 
-  const settings = () => ({ runtime: 'native', taskPrefix: 'DEV', ...store.load('settings', {}) });
+  const settings = () => {
+    const s = { runtime: 'native', taskPrefix: 'DEV', ...store.load('settings', {}) };
+    if (!/^[A-Za-z][A-Za-z0-9]{0,9}$/.test(s.taskPrefix)) s.taskPrefix = 'DEV';
+    return s;
+  };
   const runtime = () => getRuntime(settings().runtime);
 
   app.on('second-instance', () => {
@@ -134,7 +138,7 @@ function main() {
   }));
 
   ipcMain.handle('sessions:list', () =>
-    sessions.listSessions({ projectsDir: runtime().projectsDir(), taskPrefix: settings().taskPrefix }));
+    sessions.listSessions({ projectsDir: runtime().projectsDir(), taskPrefix: settings().taskPrefix, limit: 500 }));
 
   ipcMain.handle('store:get', (_e, name) => {
     if (!STORE_NAMES.has(name)) throw new Error('unknown store');

@@ -39,40 +39,70 @@ Pomysły pochodzą z `my_claude` kolegi (`docs/reference/`), ale kod piszemy od 
 - [x] Renderer: lista sesji (Recent + wszystkie, sortowane po mtime), filtr, zakładki xterm, „+ New” (folder → nazwa → start), zamykanie zakładki, przywracanie zakładek po restarcie
 - [x] Klawiatura i schowek: macOS Cmd+C/Cmd+V przez menu Edit; Windows jak Windows Terminal (Ctrl+C kopiuje przy zaznaczeniu, inaczej przerywa; Ctrl+V; Ctrl+Shift+C/V; prawy klik). Wklejanie obrazka przekazywane do `claude`
 - [x] `scripts/screenshot.js`: headless render UI do PNG
-- [ ] **Test użytkownika na macOS** (`npm install && npm start`)
+- [x] **Test użytkownika na macOS** (`npm install && npm start`)
 - [ ] **Test użytkownika na Windows**
 - [ ] Do weryfikacji na Windows: wklejanie obrazka (Ctrl+V przy obrazku w schowku wysyła Alt+V)
 - **Gotowe gdy:** na Macu i Windowsie apka startuje z `npm start`, pokazuje sesje, wznawia je w zakładkach, tworzy nowe, a po restarcie przywraca zakładki. Zrobione i sprawdzone na Linuksie headless (lista, zakładki z PTY, dialog, przywracanie, czyszczenie env)
 
 ### Etap 2 — grupowanie i organizacja
-- [ ] Grupy: statusy, własne kategorie, taski `DEV-…`, projekty
-- [ ] Wykrywanie `DEV-…`: własna nazwa → pierwszy prompt (ID lub URL ClickUp) → ostatnia gałąź git (bez rozróżniania wielkości liter, np. `dev-123-login`)
-- [ ] Przenoszenie: drag & drop, menu prawego przycisku („Przenieś do”), dialog przy zamykaniu zakładki
-- [ ] Zmiana nazwy sesji (tylko w apce, transkrypt nietknięty), kopiowanie ID sesji
-- [ ] „+ Kategoria”, zmiana nazwy kategorii, usuwanie
-- [ ] Zwijanie grup (zapamiętane), znacznik otwartej i oglądanej sesji
-- [ ] Badge `DEV-…` otwiera task w ClickUp (`https://app.clickup.com/t/<workspaceId>/DEV-123`, workspace z ustawień; bez niego badge bez linku)
+- [x] **Statusy definiowane przez użytkownika** (zastępują też kategorie z oryginału; ewentualny podział na statusy i kategorie po testach):
+  - wbudowane: **In progress** (na górze; sesja trafia tu automatycznie po otwarciu w nowej zakładce) i **Completed** (na dole, domyślnie zwinięty); można zmienić nazwę i kolor, nie można usunąć
+  - własne: „+ Status” (nazwa + kolor z palety), prawy klik na nagłówku: zmień nazwę, kolor, wyżej/niżej, usuń (sesje wracają do grup automatycznych)
+  - stałe wewnętrzne ID statusu, więc zmiana nazwy nie gubi przypisań
+- [x] Grupy automatyczne: task `DEV-…`, a bez taska projekt (folder). Kolejność: Ostatnie, In progress, własne statusy, taski (wg mtime), projekty (wg mtime), Completed
+- [x] Wykrywanie `DEV-…`: własna nazwa → pierwszy prompt (ID lub URL ClickUp) → ostatnia gałąź git
+- [x] Przenoszenie: drag & drop, menu prawego przycisku („Przenieś do”), dialog przy zamykaniu zakładki (karty statusów + „Automatycznie”; Enter = tylko zamknij, Esc = anuluj)
+- [x] Menu sesji (sidebar i zakładka): Otwórz, Zmień nazwę, Przywróć nazwę, Kopiuj ID sesji, Otwórz w ClickUp, Przenieś do, (zakładka) Zamknij
+- [x] Zmiana nazwy tylko w apce; `DEV-…` w nazwie przypisuje task
+- [x] Zwijanie grup (zapamiętane), znacznik otwartej i oglądanej sesji
+- [x] Ustawienia (okno): prefiks tasków, ID workspace'u ClickUp. Badge `DEV-…` otwiera `https://app.clickup.com/t/<workspaceId>/DEV-123`
 
-### Etap 3 — Usage (limity planu)
+- [x] Test użytkownika — pominięty, model zastąpiony w etapie 3
+- Dodatkowo: nagłówek grupy taska pokazuje tytuł najnowszej sesji (do czasu tytułów z ClickUp w etapie 4)
+
+### Etap 3 — przebudowa sidebaru: task jako grupa, status jako cecha sesji
+Zmiana modelu z etapu 2: status nie jest już grupą, do której sesja „wyjeżdża”. Grupą jest task (albo projekt), a status to etykieta sesji wewnątrz grupy.
+- [x] Trzy zakładki na górze sidebaru: **Sesje**, **Taski** (zawartość w etapie 4; do tego czasu informacja), **Historia** (płaska lista wszystkich sesji od najnowszej, bez grup, z filtrem i pełną datą)
+- [x] Limit wczytywanych sesji 200 → 500 (dla Historii)
+- [x] Zakładka Sesje:
+  - Ostatnie (3), potem grupy **task `DEV-…`** i **projekt** (sesje bez taska), sortowane wg ostatniej aktywności
+  - w grupie: sesje z kropką i nazwą statusu (In progress, własne, Completed albo „bez statusu”)
+  - **Completed** na dole, zwinięte: grupy, w których *wszystkie* sesje mają status Completed
+  - wznowienie sesji z grupy w Completed ustawia ją na In progress, więc grupa wraca na listę
+- [x] Statusy sesji: wbudowane In progress i Completed + własne (jak w etapie 2: + Status, edycja, kolejność, usuwanie)
+- [x] Zmiana statusu sesji: menu prawego przycisku, dialog przy zamykaniu zakładki (już jest), przeciągnięcie nie zmienia już statusu (grupy to taski)
+- [x] Menu nagłówka grupy: „Oznacz wszystkie sesje jako…”, otwórz w ClickUp, nowa sesja dla tego taska / projektu
+- [x] Migracja przypisań z etapu 2 (statusy zostają, zmienia się tylko sposób wyświetlania)
+- [x] **Jednorazowe porządkowanie** przy pierwszym uruchomieniu etapu 3: sesje bez statusu otwarte w zakładkach albo używane w ostatnich 2 dniach → In progress, pozostałe → Completed; statusy nadane wcześniej zostają. Powiadomienie z liczbą sesji i przyciskiem **Cofnij**
+- [x] Okno **Statusy** (zamiast „+ Status”): lista statusów, dodawanie, zmiana nazwy i koloru, kolejność, usuwanie
+- [x] Okno **Nowa sesja**: folder (z podpowiedzią, zawsze do zatwierdzenia) + nazwa w jednym oknie; z menu grupy podpowiada folder ostatniej sesji i `DEV-…` w nazwie
+- [x] Powiadomienia (toast) w rogu okna — używane też w etapie 5
+- [ ] **Test użytkownika** (macOS)
+
+### Etap 4 — ClickUp: zakładka Taski
+Apka ma działać u wielu osób: nic nie jest wpisane na sztywno, każdy podaje własny token.
+- [ ] Ustawienia → ClickUp: osobisty token API (`pk_…`, ClickUp → Settings → Apps), zapisany przez `safeStorage`, nie opuszcza procesu main
+- [ ] Po zapisaniu tokenu: `GET /v2/user` (`userId`), `GET /v2/team` (workspace; przy kilku wybór). Uzupełnia `clickupWorkspaceId`
+- [ ] Pobieranie: `GET /v2/team/{workspaceId}/task?assignees[]={userId}&subtasks=true&include_closed=true`, stronicowanie po 100. Ukrywane statusy: domyślnie dokładnie `Closed` (bez rozróżniania wielkości liter), lista w ustawieniach. Do sprawdzenia na prawdziwych danych, czy `include_closed=false` + filtr nazwy nie jest szybsze (mniej stron)
+- [ ] Cache w `clickup-tasks.json`, odświeżanie ręczne (↻) + co 10 min
+- [ ] Widok: grupy **Folder → Lista** (np. TimeTax → Speedtax). W wierszu: `DEV-…`, nazwa, status (kolor z ClickUp), priorytet, termin, liczba sesji tego taska
+- [ ] Wyszukiwarka; kliknięcie taska rozwija akcje: **+ Sesja**, Otwórz w ClickUp, Pokaż sesje (przełącza na zakładkę Sesje z filtrem)
+- [ ] **Nowa sesja z taska:** dialog z nazwą `DEV-123 <tytuł taska>` (do edycji) i folderem **podpowiedzianym** na podstawie ostatniego folderu użytego dla tej samej listy ClickUp (fallback: ten sam folder ClickUp). Użytkownik zawsze zatwierdza albo zmienia folder, apka nie wybiera sama. Sesja startuje ze statusem In progress
+- [ ] Nagłówki grup taska w zakładce Sesje pokazują tytuł z ClickUp (zamiast tytułu najnowszej sesji)
+- [ ] Brak tokenu / 401: komunikat z instrukcją; reszta apki działa
+
+### Etap 5 — automatyczna zmiana statusu z ClickUp
+- [ ] Przy każdym odświeżeniu tasków: dla grup z sesjami, które nie są Completed, sprawdź status taska (taski spoza listy otwartych: `GET /v2/task/{id}?custom_task_ids=true&team_id=…`)
+- [ ] Task w statusie `Closed` → wszystkie jego sesje dostają Completed, grupa przechodzi do sekcji Completed
+- [ ] **Powiadomienie** (toast w rogu okna): „DEV-123 zamknięty w ClickUp — 2 sesje oznaczone jako Completed” z przyciskiem **Cofnij**; zostaje do zamknięcia albo ~15 s
+- [ ] Cofnięcie zapamiętuje wyjątek, żeby ta sama zmiana nie wracała przy kolejnym odświeżeniu (do czasu następnej zmiany statusu taska)
+
+### Etap 6 — Usage (limity planu)
 - [ ] Odczyt tokenu OAuth: macOS z Keychain (`security find-generic-password …`, do weryfikacji nazwa wpisu), Windows z `~/.claude/.credentials.json`
-- [ ] `GET /api/oauth/usage` (nieudokumentowany), paski 5 h i tygodniowe, odświeżanie co 5 min + przycisk
+- [ ] `GET /api/oauth/usage` (nieudokumentowany), paski 5 h i tygodniowe, odświeżanie co 5 min + przycisk, miejsce: dół sidebaru
 - [ ] Zachowanie gdy endpoint nie działa: „niedostępne”, bez crasha
 
-### Etap 4 — ClickUp: „Moje taski”
-Apka ma działać u wielu osób, więc **nic nie jest wpisane na sztywno**. Każdy użytkownik podaje tylko swój token, resztę apka ustala sama.
-- [ ] Ustawienia → ClickUp: pole na osobisty token API (`pk_…`, ClickUp → Settings → Apps). Zapis przez `safeStorage`, token nie opuszcza procesu main
-- [ ] Po zapisaniu tokenu: `GET /v2/user` (kim jestem → `userId`), `GET /v2/team` (workspace'y; przy kilku wybór z listy). Zapis `userId`, `workspaceId` w `settings.json`
-- [ ] Pobieranie: `GET /v2/team/{workspaceId}/task?assignees[]={userId}&subtasks=true&include_closed=false`, stronicowanie po 100, cache w `clickup-tasks.json`
-- [ ] Zakładka „Moje taski” w dolnym panelu: grupowanie dwupoziomowe **Folder (klient/projekt, np. TimeTax) → Lista (produkt, np. Speedtax, Skytax)**. Space pomijamy, bo u nas wszystko jest w jednym Space `DEV`. W wierszu: ID `DEV-…`, nazwa, status (kolor z ClickUp), priorytet, termin, sprint
-- [ ] Grupowanie wg „home list” taska (`task.folder` / `task.list`). Taski dodane też do list sprintów (folder typu „| TimeTax Sprints”) nie mogą się dublować ani lądować w folderze sprintów — zweryfikować na prawdziwych danych
-- [ ] Opcja na później: grupowanie wg custom fielda (np. „Projekt”, „Sprint”), wartości są w `task.custom_fields`
-- [ ] Filtr statusów (domyślnie bez `closed`), wyszukiwarka, odświeżanie ręczne + co 10 min
-- [ ] Akcje na tasku: otwórz w przeglądarce, kopiuj ID/link, „Nowa sesja” (wybór folderu, nazwa sesji `DEV-123 <tytuł taska>`), „Pokaż sesje” (filtruje sidebar po `DEV-…`)
-- [ ] Sidebar: tytuł taska przy grupie `DEV-…` i link w badge'u, brane z cache (bez tokenów Claude'a)
-- [ ] Brak tokenu lub błąd 401: komunikat z instrukcją, gdzie wygenerować token; reszta apki działa normalnie
-- [ ] Opcjonalnie: akcje przez `claude -p` z MCP ClickUp tylko na żądanie (kosztują limit)
-
-### Etap 5 — Hubstaff (opcjonalnie)
+### Etap 7 — Hubstaff (opcjonalnie)
 - [ ] Sprawdzić plan firmy (API od planu Team) i możliwość utworzenia Personal Access Token
 - [ ] Wymiana refresh tokenu na access token (24 h), przypomnienie o wygaśnięciu PAT (90 dni)
 - [ ] Widżet tylko do odczytu: dzisiejszy / tygodniowy przepracowany czas
@@ -86,6 +116,12 @@ Apka ma działać u wielu osób, więc **nic nie jest wpisane na sztywno**. Każ
 ## Ustalone
 - macOS: zamknięcie okna kończy apkę (jak na Windows)
 - Windows: sesje Claude Code są natywne, więc wariant A je widzi; wariant C nie jest pilny
+- Sidebar: zakładki Sesje / Taski; w Sesjach grupą jest task lub projekt, a status (In progress, własne, Completed) jest cechą sesji. Grupa z samymi Completed trafia do zwiniętej sekcji Completed
+- Status zmienia się ręcznie (menu, dialog przy zamykaniu) i automatycznie, gdy task w ClickUp ma status `Closed` (z powiadomieniem i Cofnij)
+- Ukrywany status tasków w ClickUp: dokładnie `Closed`
+- Folder nowej sesji z taska: apka podpowiada, użytkownik zatwierdza
+- Stare sesje bez statusu: jednorazowe porządkowanie (otwarte i z ostatnich 2 dni → In progress, reszta → Completed) z Cofnij
+- Zakładka Historia: płaska lista wszystkich sesji
 
 ## Otwarte pytania
 - Jaki skrót wkleja obrazek w natywnym Claude Code na Windowsie — do sprawdzenia w etapie 1

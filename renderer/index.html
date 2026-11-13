@@ -12,8 +12,15 @@
   <div id="app">
     <aside id="sidebar">
       <div class="sb-head">
-        <span class="sb-title">Sesje</span>
+        <span class="sb-title">Claude GUI</span>
+        <button id="btn-settings" class="icon-btn" title="Ustawienia"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h7M13 4h1M2 12h1M7 12h7"/><circle cx="11" cy="4" r="2"/><circle cx="5" cy="12" r="2"/></svg></button>
+        <button id="btn-status" class="btn" title="Statusy sesji: dodawanie, edycja, kolejność">Statusy</button>
         <button id="btn-new" class="btn accent" title="Nowa sesja">+ Nowa</button>
+      </div>
+      <div class="sb-tabs">
+        <button class="sb-tab" data-tab="sessions">Sesje</button>
+        <button class="sb-tab" data-tab="tasks">Taski</button>
+        <button class="sb-tab" data-tab="history">Historia</button>
       </div>
       <input id="filter" type="search" placeholder="Szukaj: tytuł, projekt, DEV-…, gałąź" spellcheck="false">
       <div id="session-list"></div>
@@ -30,10 +37,14 @@
     </main>
   </div>
   <div id="overlay" hidden></div>
+  <div id="toasts"></div>
 
   <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
   <script src="util.js"></script>
+  <script src="menu.js"></script>
+  <script src="toast.js"></script>
+  <script src="groups.js"></script>
   <script src="dialogs.js"></script>
   <script src="sidebar.js"></script>
   <script src="tabs.js"></script>

@@ -21,6 +21,12 @@ function relTime(ms) {
   return new Date(ms).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
 }
 
+function fullTime(ms) {
+  const d = new Date(ms);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleString('pl-PL', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }), hour: '2-digit', minute: '2-digit' });
+}
+
 function debounce(fn, ms) {
   let t;
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };

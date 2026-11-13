@@ -30,7 +30,7 @@ Plan i stan prac: `PLAN.md` (aktualizuj checkboxy po każdym kroku). Dokumentacj
 | `src/usage.js` | (etap 3) limity planu |
 | `src/clickup.js` | (etap 4) REST ClickUp |
 | `src/hubstaff.js` | (etap 5) czas pracy |
-| `renderer/` | `index.html`, `style.css` i zwykłe skrypty (bez ES modules, kolejność w `index.html`): `util.js` (`$`, `el`, `relTime`), `dialogs.js` (`Dialogs.promptName`), `sidebar.js` (`Sidebar`), `tabs.js` (`Tabs`), `app.js` (`App`, start). xterm i fit addon jako UMD z `../node_modules` (globalne `Terminal`, `FitAddon.FitAddon`) |
+| `renderer/` | `index.html`, `style.css` i zwykłe skrypty (bez ES modules, kolejność w `index.html`): `util.js` (`$`, `el`, `relTime`), `menu.js` (`CtxMenu`), `toast.js` (`Toasts`), `groups.js` (`Groups`, `PALETTE` — model grup), `dialogs.js` (`Dialogs`: `promptName`, `statusEditor`, `manageStatuses`, `newSession`, `askCloseTab`, `settings`; jedno okno naraz — otwarcie nowego porzuca poprzednie), `sidebar.js` (`Sidebar`), `tabs.js` (`Tabs`), `app.js` (`App`, start). xterm i fit addon jako UMD z `../node_modules` (globalne `Terminal`, `FitAddon.FitAddon`) |
 | `scripts/screenshot.js` | Off-screen render prawdziwego UI do PNG |
 
 ### Kanały IPC
@@ -44,9 +44,9 @@ Plan i stan prac: `PLAN.md` (aktualizuj checkboxy po każdym kroku). Dokumentacj
 ### Pliki danych (`userData`)
 | Plik | Zawartość |
 |---|---|
-| `groups.json` | `{ categories: [name], assignments: { sessionId: groupKey }, titles: { sessionId: name }, collapsed: [groupKey] }` |
+| `groups.json` | `{ statuses: [{ id, name, color, builtin? }], assignments: { sessionId: 'status:<id>' }, titles: { sessionId: name }, collapsed: { key: bool }, ui: { tab }, v3?: true }`. `Groups.normalize()` uzupełnia wbudowane statusy i migruje starsze formaty; `v3` = jednorazowe porządkowanie już zrobione |
 | `tabs.json` | `{ tabs: [{ sessionId, cwd }], active }` |
-| `settings.json` | `{ runtime: 'native', taskPrefix: 'DEV', clickup: { userId, workspaceId, groupBy: 'folder>list' } }` (bez sekretów) |
+| `settings.json` | `{ runtime: 'native', taskPrefix: 'DEV', clickupWorkspaceId, clickup: { userId, groupBy: 'folder>list' } }` (bez sekretów; `clickup.*` od etapu 4). Edytowane w oknie Ustawienia (`Dialogs.settings`); main waliduje `taskPrefix` |
 | `secrets.bin` | Tokeny ClickUp/Hubstaff zaszyfrowane `safeStorage`. Czyta tylko main |
 | `clickup-tasks.json` | Cache „Moich tasków” (bez tokenu) |
 
@@ -68,15 +68,21 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
 - „+ Nowa”: `pickFolder` → `Dialogs.promptName({ ok, skip, cancel })` → `newId` → zakładka → `start`. Anuluj (`null`) nic nie startuje, Pomiń (`''`) zostawia domyślny tytuł (pierwszy prompt). Własna nazwa trafia do `groups.json` `titles`.
 - Klawisze: macOS — Cmd+C/V z menu Edit (xterm obsługuje zdarzenia copy/paste), Ctrl+C przerywa, Ctrl+V idzie do `claude` (wklejanie obrazka). Windows — `attachCustomKeyEventHandler`: Ctrl+C kopiuje przy zaznaczeniu, Ctrl+Shift+C kopiuje, Ctrl+V/Ctrl+Shift+V wkleja przez `clipboard:read` (z `preventDefault`, inaczej podwójne wklejenie), obrazek → `ESC v` (Alt+V, do weryfikacji). Prawy klik: kopiuj zaznaczenie albo wklej.
 
-### Grupowanie (etap 2)
-- `groupKey`: `status:backlog | status:in_progress | status:on_hold | status:review | status:closed`, `cat:<nazwa>`, `task:DEV-123`, `project:<nazwa>`.
-- `groupKeyOf(s)`: ważne ręczne przypisanie wygrywa, inaczej `autoKey(s)` = task, a bez taska projekt.
-- `taskOf(s)`: `DEV-…` we własnej nazwie wygrywa nad wykrytym.
-- Przeniesienie do grupy automatycznej usuwa ręczne przypisanie.
-- Otwarcie sesji kliknięciem ustawia `status:in_progress` (tylko gdy powstaje nowa zakładka). Przywracanie zakładek po starcie niczego nie zmienia.
-- Sekcje „Ostatnie” i „Wszystkie” (klucze `sec:recent`, `sec:all`) zwija się kliknięciem w nagłówek; stan w `groups.json` `collapsed`, ten sam mechanizm co dla grup. Przy aktywnym filtrze jest jedna niezwijana sekcja „Wyniki”.
-- Kolejność: in progress, review, on hold, backlog, kategorie, taski (wg mtime), projekty (wg mtime), closed. Taski, projekty i closed domyślnie zwinięte.
-- Podczas edycji nazwy w sidebarze odświeżenie z `fs.watch` jest odkładane, żeby nie zniszczyć inputa.
+### Sidebar i grupowanie (`renderer/sidebar.js`, `groups.js`)
+- Trzy zakładki (`App.groups.ui.tab`): **Sesje** (`renderSessions`), **Taski** (`renderTasks`, etap 4; teraz placeholder), **Historia** (`renderHistory`: płaska lista wszystkich wczytanych sesji, pełna data). Filtr jest wspólny, placeholder zależy od zakładki.
+- **Grupy są automatyczne:** `Groups.keyOf(s)` = `task:DEV-123` (z własnej nazwy, pierwszego promptu albo gałęzi) albo `project:<nazwa>`. Ręcznie nie przenosi się sesji między grupami.
+- **Status to cecha sesji:** `assignments[sessionId] = 'status:<id>'`, `Groups.statusOf(s)` zwraca status albo `null` („bez statusu”). Wbudowane `in_progress` i `completed` (nie do usunięcia), reszta własna (`s_<losowe>`), zarządzana w oknie Statusy (`Dialogs.manageStatuses`).
+- **Completed:** grupa, w której *wszystkie* sesje mają `completed` (`Groups.isDone`), idzie do zwiniętej sekcji `sec:completed` na dole. Wznowienie sesji ustawia `in_progress`, więc grupa wraca do „W toku”.
+- Kolejność w Sesjach: Ostatnie (`sec:recent`), „W toku” (grupy wg najnowszej sesji), Completed. Nagłówek grupy: nazwa, (task) tytuł najnowszej sesji bez prefiksu taska (`stripTask`; w etapie 4 tytuł z ClickUp), kropki obecnych statusów, liczba sesji, link do ClickUp.
+- Zwinięcie: `collapsed[key]`. Grupy wewnątrz Completed mają osobny klucz `done|<key>` i są domyślnie zwinięte; `sec:completed` też.
+- `Tabs.open()` ustawia `in_progress` tylko przy tworzeniu nowej zakładki; „+ Nowa” też. Przywracanie zakładek niczego nie zmienia.
+- Zmiana statusu: menu sesji (`App.sessionMenu`, sekcja Status), menu grupy (`Sidebar.groupMenu`: „Oznacz wszystkie jako…”, nowa sesja dla taska/projektu, ClickUp), dialog zamykania zakładki (`Dialogs.askCloseTab` → id statusu, `'close'` albo `null`).
+- **Nowa sesja:** `Tabs.newSession({ cwd, name })` → `Dialogs.newSession` (folder z podpowiedzią, zawsze zatwierdzany przez użytkownika, + nazwa). Z menu grupy/sesji podpowiada folder najnowszej sesji i `DEV-…` w nazwie.
+- **Jednorazowe porządkowanie** (`App.migrateV3`, flaga `v3`): sesje bez statusu otwarte w zakładkach albo z ostatnich 2 dni → `in_progress`, reszta → `completed`; toast z Cofnij (usuwa tylko te przypisania).
+- Zmiana nazwy przez `Dialogs.promptName`, `App.setTitle(s, null)` przywraca oryginał; `DEV-…` w nazwie przypisuje task. Nazwa nigdy nie trafia do transkryptu.
+- Badge `DEV-…` i ikona przy grupie otwierają `https://app.clickup.com/t/<clickupWorkspaceId>/DEV-123`; bez ID workspace'u nie są linkiem.
+- Sesja z zakładki bez transkryptu: `Tabs.sessionOf()` zwraca stub; status i nazwa działają po ID.
+- `sessions:list` wczytuje do 500 sesji (Historia).
 
 ## Zasady
 - **Apka jest dla wielu osób.** Żadnych nazw firmy, ID workspace'ów, userów, ścieżek ani prefiksów na sztywno w kodzie. Wszystko z ustawień albo wykrywane (np. user i workspace z API ClickUp).
@@ -87,7 +93,7 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
 - `open:external` przyjmuje tylko `https:`.
 - Zapisy configu atomowe (tmp + rename).
 - Ścieżki zawsze przez `path` i `os.homedir()`. Żadnych `~` ani `/` na sztywno.
-- Kolory jako zmienne CSS w `renderer/style.css` `:root` (ciemny motyw, akcent `#d97757`). Statusy: in progress `--warn`, review `#58a6ff`, on hold `#db61a2`, backlog `--muted`, closed `#3fb950`.
+- Kolory jako zmienne CSS w `renderer/style.css` `:root` (ciemny motyw, akcent `#d97757`). Kolory statusów są w danych (`statuses[].color`), paleta w `PALETTE` (`groups.js`).
 
 ## Gotchas (macOS / Windows)
 - **PATH na macOS:** apka uruchomiona z Findera/Docka nie ma PATH z `.zshrc`, więc `claude` nie zostanie znaleziony. `platform.js` przy starcie pobiera środowisko z `$SHELL -ilc` (z timeoutem) i dopisuje brakujące katalogi na końcu PATH (aktualny PATH ma pierwszeństwo).
