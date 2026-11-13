@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:">
+  <title>Claude GUI</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="sb-head">
+        <span class="sb-title">Sesje</span>
+        <button id="btn-new" class="btn accent" title="Nowa sesja">+ Nowa</button>
+      </div>
+      <input id="filter" type="search" placeholder="Szukaj: tytuł, projekt, DEV-…, gałąź" spellcheck="false">
+      <div id="session-list"></div>
+    </aside>
+    <main id="main">
+      <div id="tabbar"></div>
+      <div id="terminals">
+        <div id="empty" class="empty">
+          <div class="empty-title">Brak otwartej sesji</div>
+          <div class="empty-text">Wybierz sesję z listy po lewej albo utwórz nową przyciskiem <b>+ Nowa</b>.</div>
+          <div id="claude-missing" class="empty-warn" hidden>Nie znaleziono programu <code>claude</code>. Zainstaluj Claude Code i uruchom apkę ponownie.</div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div id="overlay" hidden></div>
+
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="util.js"></script>
+  <script src="dialogs.js"></script>
+  <script src="sidebar.js"></script>
+  <script src="tabs.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

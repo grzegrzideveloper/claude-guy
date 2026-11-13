@@ -28,18 +28,21 @@ Pomysły pochodzą z `my_claude` kolegi (`docs/reference/`), ale kod piszemy od 
 - [x] `@lydell/node-pty` ma prebuildy darwin-arm64/x64, win32-x64/arm64, linux; test spawn w sandboxie OK
 
 ### Etap 1 — okno, sesje, zakładki (MVP)
-- [ ] `main.js`: okno, single-instance lock, zamykanie (zabija PTY, zapisuje zakładki)
-- [ ] Menu zależne od systemu: macOS minimalne menu App + Edit (role), bez View/Reload; Windows bez menu
-- [ ] `src/platform.js`: PATH z powłoki logowania na macOS, odnajdywanie binarki `claude` (`claude` / `claude.exe`), `openExternal` tylko https
-- [ ] `src/runtime/native.js`: `projectsDir()`, `spawnSpec({ resumeId | sessionId, cwd })`, czyszczenie zmiennych sesji-rodzica
-- [ ] `src/sessions.js`: skan `~/.claude/projects/*/*.jsonl`, 64 KB z początku (+64 KB z końca dla dużych plików), tytuł, cwd, projekt, mtime, gałąź git
-- [ ] `src/store.js`: atomowy zapis JSON (tmp + rename) w `userData`
-- [ ] `src/pty.js`: jeden PTY na zakładkę, `write/resize/kill`, dane do renderera
-- [ ] `fs.watch` (recursive) na katalogu projektów → `sessions:changed` (debounce 1,5 s)
-- [ ] Renderer: lista sesji (Recent + wszystkie, sortowane po mtime), filtr, zakładki xterm, „+ New” (folder → nazwa → start), zamykanie zakładki, przywracanie zakładek po restarcie
-- [ ] Klawiatura i schowek: macOS Cmd+C/Cmd+V przez menu Edit; Windows jak Windows Terminal (Ctrl+C kopiuje przy zaznaczeniu, inaczej przerywa; Ctrl+V; Ctrl+Shift+C/V; prawy klik). Wklejanie obrazka przekazywane do `claude`
-- [ ] `scripts/screenshot.js`: headless render UI do PNG
-- **Gotowe gdy:** na Macu i Windowsie apka startuje z `npm start`, pokazuje sesje, wznawia je w zakładkach, tworzy nowe, a po restarcie przywraca zakładki
+- [x] `main.js`: okno, single-instance lock, zamykanie (zabija PTY, zapisuje zakładki)
+- [x] Menu zależne od systemu: macOS minimalne menu App + Edit (role), bez View/Reload; Windows bez menu
+- [x] `src/platform.js`: PATH z powłoki logowania na macOS, odnajdywanie binarki `claude` (`claude` / `claude.exe`), `openExternal` tylko https
+- [x] `src/runtime/native.js`: `projectsDir()`, `spawnSpec({ resumeId | sessionId, cwd })`, czyszczenie zmiennych sesji-rodzica
+- [x] `src/sessions.js`: skan `~/.claude/projects/*/*.jsonl`, 64 KB z początku (+64 KB z końca dla dużych plików), tytuł, cwd, projekt, mtime, gałąź git
+- [x] `src/store.js`: atomowy zapis JSON (tmp + rename) w `userData`
+- [x] `src/pty.js`: jeden PTY na zakładkę, `write/resize/kill`, dane do renderera
+- [x] `fs.watch` (recursive) na katalogu projektów → `sessions:changed` (debounce 1,5 s)
+- [x] Renderer: lista sesji (Recent + wszystkie, sortowane po mtime), filtr, zakładki xterm, „+ New” (folder → nazwa → start), zamykanie zakładki, przywracanie zakładek po restarcie
+- [x] Klawiatura i schowek: macOS Cmd+C/Cmd+V przez menu Edit; Windows jak Windows Terminal (Ctrl+C kopiuje przy zaznaczeniu, inaczej przerywa; Ctrl+V; Ctrl+Shift+C/V; prawy klik). Wklejanie obrazka przekazywane do `claude`
+- [x] `scripts/screenshot.js`: headless render UI do PNG
+- [ ] **Test użytkownika na macOS** (`npm install && npm start`)
+- [ ] **Test użytkownika na Windows**
+- [ ] Do weryfikacji na Windows: wklejanie obrazka (Ctrl+V przy obrazku w schowku wysyła Alt+V)
+- **Gotowe gdy:** na Macu i Windowsie apka startuje z `npm start`, pokazuje sesje, wznawia je w zakładkach, tworzy nowe, a po restarcie przywraca zakładki. Zrobione i sprawdzone na Linuksie headless (lista, zakładki z PTY, dialog, przywracanie, czyszczenie env)
 
 ### Etap 2 — grupowanie i organizacja
 - [ ] Grupy: statusy, własne kategorie, taski `DEV-…`, projekty
