@@ -42,11 +42,18 @@ function transcriptExists(sessionId) {
 }
 
 // What to spawn in a PTY. Exactly one of resumeId / sessionId.
-function spawnSpec({ claudePath, resumeId, sessionId, cwd }) {
+// appendSystemPrompt: extra system instructions (task context); initialPrompt: first message (new sessions).
+function spawnSpec({ claudePath, resumeId, sessionId, cwd, appendSystemPrompt = null, initialPrompt = null }) {
+  const isShim = process.platform === 'win32' && /\.(cmd|bat)$/i.test(claudePath);
+  // cmd.exe re-parses the command line, so text passed through an npm .cmd shim loses characters that
+  // cmd treats specially. claude.exe (native installer) gets the text unchanged.
+  const safe = t => (isShim ? t.replace(/["%^&|<>!\r\n]/g, ' ') : t);
   const args = resumeId ? ['--resume', resumeId] : ['--session-id', sessionId];
+  if (appendSystemPrompt) args.push('--append-system-prompt', safe(appendSystemPrompt));
+  if (initialPrompt && !resumeId) args.push(safe(initialPrompt));
   let file = claudePath;
   let fileArgs = args;
-  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(claudePath)) {
+  if (isShim) {
     // npm-installed shim; ConPTY needs a real executable.
     file = process.env.ComSpec || 'cmd.exe';
     fileArgs = ['/d', '/s', '/c', claudePath, ...args];
@@ -54,4 +61,18 @@ function spawnSpec({ claudePath, resumeId, sessionId, cwd }) {
   return { file, args: fileArgs, cwd, env: cleanEnv() };
 }
 
-module.exports = { name: 'native', claudeDir, projectsDir, cleanEnv, transcriptExists, spawnSpec, PARENT_SESSION_VARS };
+// Does this claude accept --append-system-prompt in interactive mode? Checked once via `claude --help`.
+function detectCaps(claudePath) {
+  const { execFile } = require('child_process');
+  return new Promise(resolve => {
+    const isShim = process.platform === 'win32' && /\.(cmd|bat)$/i.test(claudePath);
+    const file = isShim ? (process.env.ComSpec || 'cmd.exe') : claudePath;
+    const args = isShim ? ['/d', '/s', '/c', claudePath, '--help'] : ['--help'];
+    execFile(file, args, { timeout: 15000, env: cleanEnv(), windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
+      const out = `${stdout || ''}${stderr || ''}`;
+      resolve({ appendSystemPrompt: out.includes('--append-system-prompt'), checked: !err || !!out });
+    });
+  });
+}
+
+module.exports = { name: 'native', claudeDir, projectsDir, cleanEnv, transcriptExists, spawnSpec, detectCaps, PARENT_SESSION_VARS };

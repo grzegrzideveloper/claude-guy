@@ -154,6 +154,7 @@ const Sidebar = {
       { header: isTask ? `${label} · ${cuTask ? cuTask.name : this.stripTask(App.titleOf(items[0]), label)}` : label },
       { label: isTask ? 'Nowa sesja dla tego taska…' : 'Nowa sesja w tym projekcie…',
         onClick: () => (cuTask ? App.newSessionFromTask(cuTask) : Tabs.newSession({ cwd: items[0].cwd, name: isTask ? `${label} ` : '' })) },
+      ...(isTask && App.clickup.status.configured ? [{ label: 'Podgląd taska', onClick: () => Tabs.openTaskPreview(label) }] : []),
       ...(isTask ? [{ label: 'Otwórz w ClickUp', disabled: !url, hint: url ? '' : 'brak ID workspace’u', onClick: () => api.openExternal(url) }] : []),
       '-',
       { header: `Oznacz wszystkie (${items.length}) jako` },
@@ -333,9 +334,12 @@ const Sidebar = {
       const actions = el('div', 'cu-actions');
       const bNew = el('button', 'btn sm accent', '+ Nowa sesja');
       bNew.onclick = e => { e.stopPropagation(); App.newSessionFromTask(t); };
-      const bOpen = el('button', 'btn sm', 'Otwórz w ClickUp ↗');
+      const bView = el('button', 'btn sm', 'Podgląd');
+      bView.onclick = e => { e.stopPropagation(); Tabs.openTaskPreview(key); };
+      const bOpen = el('button', 'btn sm', 'ClickUp ↗');
+      bOpen.title = 'Otwórz w przeglądarce';
       bOpen.onclick = e => { e.stopPropagation(); api.openExternal(t.url || Groups.taskUrl(key)); };
-      actions.append(bNew, bOpen);
+      actions.append(bNew, bView, bOpen);
       wrap.append(actions);
       const sess = App.sessions.filter(s => (Groups.taskOf(s) || '').toUpperCase() === key.toUpperCase());
       if (sess.length) {
@@ -351,6 +355,7 @@ const Sidebar = {
       CtxMenu.show(e.clientX, e.clientY, [
         { header: `${key} · ${t.name}` },
         { label: 'Nowa sesja dla tego taska…', onClick: () => App.newSessionFromTask(t) },
+        { label: 'Podgląd taska', onClick: () => Tabs.openTaskPreview(key) },
         { label: 'Otwórz w ClickUp', onClick: () => api.openExternal(t.url || Groups.taskUrl(key)) },
         { label: 'Pokaż sesje tego taska', disabled: !nSessions, onClick: () => App.showTaskSessions(key) },
         '-',

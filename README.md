@@ -24,6 +24,7 @@ Na górze trzy zakładki: **Sesje**, **Taski** (Twoje taski z ClickUp) i **Histo
 - Na górze **Ostatnie** (3 ostatnio używane), niżej **W toku**: sesje pogrupowane automatycznie wg taska `DEV-…` (z nazwy sesji, pierwszego promptu albo gałęzi git), a bez taska wg projektu (folderu).
 - Każda sesja ma **status**, widoczny jako kolorowa kropka z nazwą: **In progress** (ustawiany sam, gdy otwierasz sesję w nowej zakładce albo tworzysz nową), Twoje własne statusy albo **Completed**.
 - Grupa, w której wszystkie sesje są Completed, przechodzi do zwiniętej sekcji **Completed** na dole. Wystarczy otworzyć którąś z jej sesji, żeby wróciła do „W toku”.
+- **Automatycznie:** gdy task dostanie w ClickUp status **Closed**, przy najbliższym odświeżeniu (co 10 min albo ↻ w zakładce Taski) jego sesje dostają Completed — także te otwarte w zakładkach (zakładki zostają otwarte). W rogu pojawia się powiadomienie z **Cofnij**; po cofnięciu apka nie zmieni ich ponownie, dopóki task nie wróci do otwartych.
 - **Zmiana statusu:** prawy klik na sesji → Status, prawy klik na nagłówku grupy → „Oznacz wszystkie jako…” albo przy zamykaniu zakładki.
 - **Statusy** (przycisk w nagłówku): dodawanie, zmiana nazwy i koloru, kolejność, usuwanie. In progress i Completed można przemianować, ale nie usunąć.
 - **Prawy klik na sesji** (też na zakładce): Otwórz, Zmień nazwę…, Przywróć oryginalną nazwę, Kopiuj ID sesji, Nowa sesja w tym folderze…, Otwórz DEV-… w ClickUp, Status, (na zakładce) Zamknij zakładkę…
@@ -33,7 +34,11 @@ Na górze trzy zakładki: **Sesje**, **Taski** (Twoje taski z ClickUp) i **Histo
 - **Filtr** szuka po tytule, projekcie, tasku, gałęzi i statusie.
 - **Badge `DEV-…`** otwiera task w ClickUp, gdy w **Ustawieniach** (ikona suwaków) podasz ID workspace'u, czyli liczbę z adresu `app.clickup.com/<ID>/…`.
 
-**Taski:** taski z ClickUp przypisane do Ciebie, bez statusu Closed, pogrupowane wg folderu i listy (np. TimeTax → Speedtax). Przy tasku jest status, priorytet, termin i liczba Twoich sesji. Kliknięcie rozwija **+ Nowa sesja** (nazwa `DEV-123 <tytuł>`, folder podpowiedziany na podstawie poprzednich sesji z tej listy — zawsze go zatwierdzasz), **Otwórz w ClickUp** i listę sesji tego taska. Lista odświeża się co 10 minut albo przyciskiem ↻.
+**Podgląd taska:** w zakładce sesji utworzonej z taska (albo z wykrytym `DEV-…`) nad terminalem jest przełącznik **[Terminal] [Task DEV-123]** — widok taska pokazuje opis, załączniki (obrazki z powiększeniem, inne pliki otwierane w przeglądarce), checklisty, subtaski i komentarze. Terminal działa dalej w tle. Podgląd otworzysz też bez sesji: zakładka Taski → **Podgląd** albo prawy klik na tasku lub grupie → **Podgląd taska** (otwiera się jako osobna zakładka ◆).
+
+**Sesja z taska zna swój task:** apka przekazuje Claude'owi przy każdym starcie i wznowieniu ID, tytuł i link taska z instrukcją, żeby szczegóły pobierał przez MCP ClickUp, kiedy będą potrzebne (nic nie jest wysyłane, dopóki nie napiszesz promptu). W oknie Nowa sesja możesz zaznaczyć **Zacznij od pobrania taska** — Claude od razu pobierze task i streści, co jest do zrobienia (to zużywa limit).
+
+**Taski:** taski z ClickUp przypisane do Ciebie, bez statusu Closed, pogrupowane wg folderu i listy (np. TimeTax → Speedtax). Przy tasku jest status, priorytet, termin i liczba Twoich sesji. Kliknięcie rozwija **+ Nowa sesja**, **Podgląd** (nazwa `DEV-123 <tytuł>`, folder podpowiedziany na podstawie poprzednich sesji z tej listy — zawsze go zatwierdzasz), **Otwórz w ClickUp** i listę sesji tego taska. Lista odświeża się co 10 minut albo przyciskiem ↻.
 
 **Historia:** wszystkie sesje (do 500 ostatnich) w jednej liście od najnowszej, z datą i godziną, bez grupowania.
 

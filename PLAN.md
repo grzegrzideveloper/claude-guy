@@ -94,17 +94,28 @@ Apka ma działać u wielu osób: nic nie jest wpisane na sztywno, każdy podaje 
 - [x] **Test użytkownika** z prawdziwym ClickUp (macOS) — po poprawce okna Nowa sesja (kolizja klasy `.empty`)
 
 ### Etap 5 — automatyczna zmiana statusu z ClickUp
-- [ ] Przy każdym odświeżeniu tasków: dla grup z sesjami, które nie są Completed, sprawdź status taska (taski spoza listy otwartych: `GET /v2/task/{id}?custom_task_ids=true&team_id=…`)
-- [ ] Task w statusie `Closed` → wszystkie jego sesje dostają Completed, grupa przechodzi do sekcji Completed
-- [ ] **Powiadomienie** (toast w rogu okna): „DEV-123 zamknięty w ClickUp — 2 sesje oznaczone jako Completed” z przyciskiem **Cofnij**; zostaje do zamknięcia albo ~15 s
-- [ ] Cofnięcie zapamiętuje wyjątek, żeby ta sama zmiana nie wracała przy kolejnym odświeżeniu (do czasu następnej zmiany statusu taska)
+- [x] Przy każdym odświeżeniu tasków: dla grup z sesjami, które nie są Completed, sprawdź status taska (taski spoza listy otwartych: `GET /v2/task/{id}?custom_task_ids=true&team_id=…`, max 40 na odświeżenie)
+- [x] Task w statusie `Closed` → wszystkie jego sesje dostają Completed (także otwarte w zakładkach — zakładki zostają otwarte), grupa przechodzi do sekcji Completed
+- [x] **Powiadomienie** (toast w rogu okna): „DEV-123 zamknięty w ClickUp — 2 sesje oznaczone jako Completed” z przyciskiem **Cofnij**; zostaje do zamknięcia albo ~15 s
+- [x] Cofnięcie zapamiętuje wyjątek, żeby ta sama zmiana nie wracała przy kolejnym odświeżeniu (do czasu następnej zmiany statusu taska)
+- [ ] **Test użytkownika** z prawdziwym ClickUp (task zamknięty w ClickUp)
 
-### Etap 6 — Usage (limity planu)
+### Etap 6 — treść taska w apce i kontekst taska w sesji
+- [x] **Widok taska** (bez przeglądarki): nagłówek (ID, tytuł, status, priorytet, termin, lista/folder, osoby, tagi, ↗ ClickUp, ↻), opis (Markdown → HTML przez `marked` + `DOMPurify`), załączniki (obrazki jako miniatury z powiększeniem, reszta jako lista otwierana w przeglądarce), checklisty, subtaski, komentarze (tylko odczyt)
+- [x] Obrazy i załączniki pobiera main (`clickup:attachment`, tylko domeny ClickUp, limit rozmiaru) i oddaje jako `data:` URL — CSP rendera bez zmian
+- [x] Linki w opisie i komentarzach otwierają się w przeglądarce (tylko https)
+- [x] **Przełącznik w zakładce sesji** z taskiem: [Terminal] [Task DEV-123] nad terminalem; terminal działa dalej w tle
+- [x] **Podgląd z zakładki Taski** (przycisk „Podgląd” i menu): osobna zakładka bez terminala, nie zapamiętywana po restarcie
+- [x] **Kontekst taska w sesji** (tylko sesje utworzone z taska, `groups.fromTask`): przy każdym starcie i wznowieniu `claude … --append-system-prompt "<ID, tytuł, link, instrukcja: szczegóły przez MCP ClickUp, gdy potrzebne>"`. Wsparcie flagi wykrywane raz z `claude --help`; bez niej — awaryjnie wpisanie `DEV-123 ` w pole promptu nowej sesji (bez wysyłania)
+- [x] **„Zacznij od pobrania taska”** (checkbox w oknie Nowa sesja z taska, domyślnie wyłączony): pierwszy prompt „Pobierz przez MCP ClickUp task DEV-123 … i streść, co jest do zrobienia” (zużywa limit)
+- [ ] **Test użytkownika** (macOS): `npm install` (nowe zależności `marked`, `dompurify`), podgląd prawdziwego taska z załącznikami, sesja z taska z kontekstem i z pierwszym promptem
+
+### Etap 7 — Usage (limity planu)
 - [ ] Odczyt tokenu OAuth: macOS z Keychain (`security find-generic-password …`, do weryfikacji nazwa wpisu), Windows z `~/.claude/.credentials.json`
 - [ ] `GET /api/oauth/usage` (nieudokumentowany), paski 5 h i tygodniowe, odświeżanie co 5 min + przycisk, miejsce: dół sidebaru
 - [ ] Zachowanie gdy endpoint nie działa: „niedostępne”, bez crasha
 
-### Etap 7 — Hubstaff (opcjonalnie)
+### Etap 8 — Hubstaff (opcjonalnie)
 - [ ] Sprawdzić plan firmy (API od planu Team) i możliwość utworzenia Personal Access Token
 - [ ] Wymiana refresh tokenu na access token (24 h), przypomnienie o wygaśnięciu PAT (90 dni)
 - [ ] Widżet tylko do odczytu: dzisiejszy / tygodniowy przepracowany czas
@@ -120,7 +131,7 @@ Apka ma działać u wielu osób: nic nie jest wpisane na sztywno, każdy podaje 
 - macOS: zamknięcie okna kończy apkę (jak na Windows)
 - Windows: sesje Claude Code są natywne, więc wariant A je widzi; wariant C nie jest pilny
 - Sidebar: zakładki Sesje / Taski; w Sesjach grupą jest task lub projekt, a status (In progress, własne, Completed) jest cechą sesji. Grupa z samymi Completed trafia do zwiniętej sekcji Completed
-- Status zmienia się ręcznie (menu, dialog przy zamykaniu) i automatycznie, gdy task w ClickUp ma status `Closed` (z powiadomieniem i Cofnij)
+- Status zmienia się ręcznie (menu, dialog przy zamykaniu) i automatycznie, gdy task w ClickUp ma status `Closed` (z powiadomieniem i Cofnij); dotyczy też sesji otwartych w zakładkach, bez zamykania zakładek
 - Ukrywany status tasków w ClickUp: dokładnie `Closed`
 - Folder nowej sesji z taska: apka podpowiada, użytkownik zatwierdza
 - Stare sesje bez statusu: jednorazowe porządkowanie (otwarte i z ostatnich 2 dni → In progress, reszta → Completed) z Cofnij

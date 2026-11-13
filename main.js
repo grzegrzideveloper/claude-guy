@@ -265,6 +265,52 @@ function main() {
     return { ok: true };
   });
 
+  // Status of individual tasks (for auto-Completed): keys like DEV-123. At most 40 per call, 4 at a time.
+  // Returns { KEY: { status, type } | { error: httpStatus } }.
+  ipcMain.handle('clickup:taskStatuses', async (_e, keys) => {
+    const c = cuSettings();
+    const token = cuToken();
+    if (!token || !c || !c.teamId || !Array.isArray(keys)) return {};
+    const list = [...new Set(keys.map(String).filter(k => /^[A-Za-z0-9_-]{1,40}$/.test(k)))].slice(0, 40);
+    const out = {};
+    let i = 0;
+    const worker = async () => {
+      while (i < list.length) {
+        const k = list[i++];
+        try {
+          const t = await clickup.getTask(token, k, c.teamId);
+          out[k] = { status: t.status ? t.status.name : null, type: t.status ? t.status.type : null };
+        } catch (err) {
+          out[k] = { error: err.status || 0 };
+        }
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    return out;
+  });
+
+  ipcMain.handle('clickup:taskDetail', async (_e, key) => {
+    const c = cuSettings();
+    const token = cuToken();
+    if (!token || !c || !c.teamId) return { ok: false, error: 'ClickUp nie jest skonfigurowany.' };
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(String(key || ''))) return { ok: false, error: 'Nieprawidłowe ID taska.' };
+    try {
+      return { ok: true, task: await clickup.getTaskDetail(token, String(key), c.teamId) };
+    } catch (err) {
+      return errOut(err);
+    }
+  });
+
+  ipcMain.handle('clickup:attachment', async (_e, url) => {
+    const token = cuToken();
+    if (!token) return { ok: false, error: 'ClickUp nie jest skonfigurowany.' };
+    try {
+      return { ok: true, ...(await clickup.fetchAttachment(token, String(url || ''))) };
+    } catch (err) {
+      return errOut(err);
+    }
+  });
+
   // Cached for 2 minutes unless force. A second call while fetching joins the running one.
   ipcMain.handle('clickup:tasks', async (_e, { force = false } = {}) => {
     const c = cuSettings();
@@ -295,8 +341,32 @@ function main() {
 
   ipcMain.handle('session:newId', () => crypto.randomUUID());
 
+  // claude capabilities (does it take --append-system-prompt interactively?), detected once.
+  let capsPromise = null;
+  const claudeCaps = () => {
+    if (!claudePath) return Promise.resolve({ appendSystemPrompt: false }); // not cached: claude may appear later
+    if (!capsPromise) {
+      capsPromise = runtime().detectCaps(claudePath).then(c => { log(`claude caps: appendSystemPrompt=${c.appendSystemPrompt}`); return c; });
+    }
+    return capsPromise;
+  };
+
+  const clean = (v, max) => String(v || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
+
+  // Task context for sessions created from a ClickUp task: appended to Claude's system prompt on every start.
+  function taskContextPrompt(tc) {
+    const key = clean(tc.key, 40);
+    if (!/^[A-Za-z0-9_-]+$/.test(key)) return null;
+    const title = clean(tc.title, 200);
+    const url = /^https:\/\/app\.clickup\.com\//.test(String(tc.url || '')) ? clean(tc.url, 300) : '';
+    return `Kontekst z aplikacji Claude GUI: ta sesja dotyczy taska ClickUp ${key}${title ? ` „${title}”` : ''}${url ? ` (${url})` : ''}. ` +
+      `Gdy potrzebujesz szczegółów tego taska (opis, komentarze, załączniki, status), pobierz je przez MCP ClickUp, podając ID ${key}. ` +
+      'Nie pobieraj ich, jeśli nie są potrzebne do bieżącej pracy.';
+  }
+
   // Start claude in a PTY for a tab. isNew → --session-id, otherwise --resume.
-  ipcMain.handle('session:start', (_e, { tabId, sessionId, cwd, isNew, cols, rows }) => {
+  // taskContext: { key, title, url } for sessions created from a task; initialPrompt: first message (new only).
+  ipcMain.handle('session:start', async (_e, { tabId, sessionId, cwd, isNew, cols, rows, taskContext, initialPrompt }) => {
     if (HEADLESS && !SHOT_SPAWN) return { ok: false, error: 'headless' };
     if (!/^[0-9a-f-]{36}$/i.test(sessionId || '')) return { ok: false, error: 'Nieprawidłowe ID sesji' };
     if (!claudePath) claudePath = platform.findClaude();
@@ -306,12 +376,24 @@ function main() {
     } catch {
       return { ok: false, error: `Folder nie istnieje: ${cwd}` };
     }
-    const spec = runtime().spawnSpec(isNew ? { claudePath, sessionId, cwd } : { claudePath, resumeId: sessionId, cwd });
+    const caps = await claudeCaps();
+    const ctx = taskContext ? taskContextPrompt(taskContext) : null;
+    const first = isNew && initialPrompt ? clean(initialPrompt, 2000) : null;
+    const spec = runtime().spawnSpec({
+      claudePath, cwd,
+      ...(isNew ? { sessionId } : { resumeId: sessionId }),
+      appendSystemPrompt: ctx && caps.appendSystemPrompt ? ctx : null,
+      initialPrompt: first,
+    });
     try {
       const pid = pty.start(tabId, spec, { cols, rows },
         data => send('pty:data', tabId, data),
         code => send('pty:exit', tabId, code));
-      log(`start ${isNew ? 'new' : 'resume'} ${sessionId} pid=${pid} cwd=${cwd}`);
+      log(`start ${isNew ? 'new' : 'resume'} ${sessionId} pid=${pid} cwd=${cwd}${ctx ? ` task=${clean(taskContext.key, 40)}${caps.appendSystemPrompt ? '' : ' (no --append-system-prompt)'}` : ''}${first ? ' +first-prompt' : ''}`);
+      // Fallback without --append-system-prompt: type the task id into a new session's prompt, unsent.
+      if (ctx && !caps.appendSystemPrompt && isNew && !first) {
+        setTimeout(() => pty.write(tabId, `${clean(taskContext.key, 40)} `), 2500);
+      }
       return { ok: true };
     } catch (err) {
       log(`spawn failed: ${err.message}`);
@@ -344,6 +426,7 @@ function main() {
   app.whenReady().then(() => {
     platform.loadLoginShellEnv(log);
     claudePath = platform.findClaude();
+    claudeCaps(); // warm up
     log(`start: platform=${process.platform} claude=${claudePath || 'NOT FOUND'} data=${store.dir} headless=${HEADLESS}`);
     buildMenu();
     createWindow();

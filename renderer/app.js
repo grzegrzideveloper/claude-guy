@@ -107,6 +107,74 @@ const App = {
       this.clickup.error = r.error || null;
     }
     Sidebar.render();
+    Tabs.refreshLabels(); // task names and the Terminal/Task switch depend on the task list
+    if (!r.error && r.configured !== false) this.syncClosedTasks().catch(err => console.error('syncClosedTasks', err));
+  },
+
+  // Stage 5: sessions of tasks that are Closed in ClickUp become Completed (open tabs too; tabs stay open).
+  // Candidates: task groups with at least one session not Completed and the task missing from my open
+  // tasks (closed tasks aren't fetched). Undo restores the previous statuses and remembers the task in
+  // groups.autoCloseSkip until ClickUp shows it open again.
+  async syncClosedTasks() {
+    if (this.syncing) return;
+    this.syncing = true;
+    try {
+      const hidden = new Set(((this.settings.clickup && this.settings.clickup.hiddenStatuses) || ['closed']).map(x => x.toLowerCase()));
+      const openKeys = new Set(this.clickup.tasks.map(t => this.cuKey(t).toUpperCase()));
+      const skip = this.groups.autoCloseSkip || (this.groups.autoCloseSkip = {});
+      // tasks open again → forget the undo
+      for (const k of Object.keys(skip)) if (openKeys.has(k)) delete skip[k];
+
+      const byTask = new Map();
+      for (const s of this.sessions) {
+        const k = (Groups.taskOf(s) || '').toUpperCase();
+        if (!k || openKeys.has(k)) continue;
+        if (!byTask.has(k)) byTask.set(k, []);
+        byTask.get(k).push(s);
+      }
+      const cands = [...byTask].filter(([k, list]) => !skip[k] && list.some(s => { const st = Groups.statusOf(s); return !st || st.id !== 'completed'; }))
+        .map(([k]) => k);
+      if (!cands.length) { this.saveGroups(); return; }
+
+      const res = await api.clickupTaskStatuses(cands);
+      const changes = []; // { key, items: [{ s, prev }] }
+      for (const k of cands) {
+        const r = res[k];
+        if (!r || r.error || !r.status) continue;
+        if (!hidden.has(r.status.toLowerCase())) continue;
+        const items = [];
+        for (const s of byTask.get(k)) {
+          const st = Groups.statusOf(s);
+          if (st && st.id === 'completed') continue;
+          items.push({ s, prev: st ? st.id : null });
+          Groups.setStatus(s, 'completed', { render: false });
+        }
+        if (items.length) changes.push({ key: k, items });
+      }
+      this.saveGroups();
+      if (!changes.length) return;
+      Sidebar.render();
+
+      const n = changes.reduce((a, c) => a + c.items.length, 0);
+      const sesje = x => `${x} ${x === 1 ? 'sesja' : x % 10 >= 2 && x % 10 <= 4 && (x % 100 < 10 || x % 100 >= 20) ? 'sesje' : 'sesji'}`;
+      const text = changes.length === 1
+        ? `${changes[0].key} zamknięty w ClickUp — ${sesje(n)} → Completed.`
+        : `${changes.length} taski zamknięte w ClickUp (${changes.map(c => c.key).join(', ')}) — ${sesje(n)} → Completed.`;
+      Toasts.show({
+        text,
+        timeout: 20000,
+        action: { label: 'Cofnij', onClick: () => {
+          for (const c of changes) {
+            for (const { s, prev } of c.items) Groups.setStatus(s, prev, { render: false });
+            skip[c.key] = true;
+          }
+          this.saveGroups();
+          Sidebar.render();
+        } },
+      });
+    } finally {
+      this.syncing = false;
+    }
   },
 
   // ClickUp task by our task key (custom id like DEV-123, or the raw id).
@@ -149,7 +217,7 @@ const App = {
 
   async newSessionFromTask(t) {
     const key = this.cuKey(t);
-    const r = await Tabs.newSession({ cwd: this.suggestFolder(t), name: `${key} ${t.name}`.slice(0, 200), suggested: true });
+    const r = await Tabs.newSession({ cwd: this.suggestFolder(t), name: `${key} ${t.name}`.slice(0, 200), suggested: true, task: t });
     if (r) await this.rememberFolder(t, r.cwd);
   },
 
@@ -165,6 +233,7 @@ const App = {
     if (this.groups.titles[s.id]) items.push({ label: 'Przywróć oryginalną nazwę', onClick: () => this.setTitle(s, null) });
     items.push({ label: 'Kopiuj ID sesji', onClick: () => api.clipboardWrite(s.id) });
     items.push({ label: 'Nowa sesja w tym folderze…', onClick: () => Tabs.newSession({ cwd: s.cwd, name: task ? `${task} ` : '' }) });
+    if (task && this.clickup.status.configured) items.push({ label: `Podgląd ${task}`, onClick: () => Tabs.openTaskPreview(task) });
     if (task) items.push({ label: `Otwórz ${task} w ClickUp`, disabled: !url, hint: url ? '' : 'brak ID workspace\u2019u', onClick: () => api.openExternal(url) });
     items.push('-', { header: 'Status' });
     for (const st of Groups.allStatuses()) {
@@ -216,7 +285,7 @@ const App = {
     setInterval(() => this.loadClickup({ force: true }), 10 * 60 * 1000);
     this.onboarding();
 
-    api.onPtyData((id, data) => { const t = Tabs.tabs.get(id); if (t) t.term.write(data); });
+    api.onPtyData((id, data) => { const t = Tabs.tabs.get(id); if (t && t.term) t.term.write(data); });
     api.onPtyExit((id, code) => Tabs.onExit(id, code));
     api.onSessionsChanged(() => this.loadSessions());
 

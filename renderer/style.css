@@ -121,9 +121,18 @@ button { font: inherit; color: inherit; }
 .tab-close:hover { background: var(--border); color: var(--text); }
 
 #terminals { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+/* A tab's content: optional Terminal/Task switch, the terminal host and the task view host. */
+.pane { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+.pane-bar { flex-shrink: 0; display: flex; align-items: center; gap: 4px; padding: 5px 8px; border-bottom: 1px solid var(--border); background: var(--panel); }
+.pane-btn { border: 1px solid transparent; background: none; color: var(--muted); padding: 3px 10px; border-radius: 6px; cursor: pointer; }
+.pane-btn:hover { color: var(--text); background: var(--hover); }
+.pane-btn.active { color: var(--text); background: var(--panel2); border-color: var(--border); }
+.pane-sub { margin-left: 8px; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.taskhost { flex: 1; min-height: 0; overflow-y: auto; }
+.tab-task .tab-label::before { content: '◆ '; color: var(--task); }
 /* Padding goes on .xterm, not .term: FitAddon subtracts the terminal element's padding but not its parent's,
    so padding on .term makes it compute one row too many and the last line (the prompt) is cut off. */
-.term { position: absolute; inset: 0; background: var(--bg); }
+.term { position: relative; flex: 1; min-height: 0; background: var(--bg); }
 .term .xterm { height: 100%; padding: 6px 0 6px 8px; background: var(--bg); }
 .term .xterm .xterm-viewport { background-color: var(--bg) !important; }
 
@@ -184,6 +193,59 @@ button { font: inherit; color: inherit; }
 .cu-actions { display: flex; gap: 6px; margin-top: 8px; }
 .cu-sesslist { margin-top: 6px; border-top: 1px solid var(--border); padding-top: 4px; }
 .cu-sesslist .session { padding: 4px 6px; }
+
+/* task view */
+.tv { max-width: 920px; margin: 0 auto; padding: 18px 24px 40px; line-height: 1.5; }
+.tv-msg { padding: 24px; color: var(--muted); display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.tv-msg.error { color: #ffaba8; }
+.tv-msg.small { padding: 4px 0; font-size: 12px; }
+.tv-top { display: flex; align-items: center; gap: 8px; }
+.tv-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.tv-title { font-size: 20px; font-weight: 600; margin: 8px 0 8px; line-height: 1.3; }
+.tv-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; font-size: 12px; }
+.tv-due.overdue { color: var(--danger); }
+.tv-tag { padding: 0 6px; border-radius: 4px; background: var(--panel2); font-size: 11px; }
+.tv-person { display: inline-flex; align-items: center; gap: 5px; }
+.tv-avatar { width: 18px; height: 18px; border-radius: 50%; background: var(--task); color: #fff; font-size: 9px; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; }
+.tv-section { margin: 22px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.tv-pad { padding: 4px 0; }
+.tv-md { overflow-wrap: anywhere; }
+.tv-md h1, .tv-md h2, .tv-md h3 { font-size: 15px; margin: 14px 0 6px; }
+.tv-md p { margin: 6px 0; }
+.tv-md a, .tv-link { color: #79b8ff; cursor: pointer; }
+.tv-md code { background: var(--panel2); padding: 1px 4px; border-radius: 4px; font-family: Menlo, Consolas, monospace; font-size: 12px; }
+.tv-md pre { background: var(--panel2); padding: 10px; border-radius: 6px; overflow-x: auto; }
+.tv-md pre code { background: none; padding: 0; }
+.tv-md blockquote { margin: 6px 0; padding-left: 10px; border-left: 3px solid var(--border); color: #cfcfcf; }
+.tv-md table { border-collapse: collapse; }
+.tv-md td, .tv-md th { border: 1px solid var(--border); padding: 4px 8px; }
+.tv-md ul, .tv-md ol { padding-left: 22px; }
+.tv-img { max-width: 100%; border-radius: 6px; cursor: zoom-in; display: block; margin: 6px 0; }
+.tv-img.loading, .tv-thumb.loading { min-height: 60px; min-width: 120px; background: var(--panel2); }
+.tv-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.tv-file { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; cursor: pointer; background: var(--panel); }
+.tv-file:hover { border-color: var(--accent); }
+.tv-thumb { width: 100%; height: 100px; object-fit: cover; display: block; }
+.tv-ext { height: 100px; display: flex; align-items: center; justify-content: center; font-size: 18px; text-transform: uppercase; color: var(--muted); background: var(--panel2); }
+.tv-file-info { padding: 6px 8px; font-size: 12px; }
+.tv-file-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-check { list-style: none; padding: 0; margin: 0; }
+.tv-check li { display: flex; gap: 8px; padding: 2px 0; }
+.tv-check li.done { color: var(--muted); text-decoration: line-through; }
+.tv-box { width: 16px; }
+.tv-subs { display: flex; flex-direction: column; gap: 2px; }
+.tv-sub { display: flex; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+.tv-sub:hover { background: var(--hover); }
+.tv-sub-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-comment { padding: 10px 12px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.tv-comment-head { display: flex; gap: 10px; align-items: center; font-size: 12px; margin-bottom: 6px; }
+.tv-comment-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tv-foot { margin-top: 24px; font-size: 11px; }
+.lightbox { position: fixed; inset: 0; z-index: 200; background: #000d; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: zoom-out; }
+.lightbox img { max-width: 94vw; max-height: 88vh; object-fit: contain; border-radius: 6px; }
+.lightbox-title { color: #ccc; font-size: 12px; }
+.dialog-check { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; cursor: pointer; }
+.dialog-check input { margin-top: 3px; }
 
 /* toasts */
 #toasts { position: fixed; right: 16px; bottom: 16px; z-index: 120; display: flex; flex-direction: column; gap: 8px; max-width: 420px; }

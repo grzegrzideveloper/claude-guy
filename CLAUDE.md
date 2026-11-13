@@ -23,30 +23,30 @@ Plan i stan prac: `PLAN.md` (aktualizuj checkboxy po każdym kroku). Dokumentacj
 | `preload.js` | Jedyny most: `window.api`. Trzymaj go wąskim |
 | `src/platform.js` | Różnice OS: PATH z powłoki logowania (macOS), odnajdywanie binarki `claude`, `openExternal` (tylko https), modyfikator skrótów |
 | `src/runtime/index.js` | Wybór runtime'u. Na razie tylko `native` |
-| `src/runtime/native.js` | `projectsDir()`, `spawnSpec({ resumeId \| sessionId, cwd })`, `cleanEnv()`. Tu i tylko tu wiadomo, jak i gdzie działa `claude` (pod przyszły runtime `wsl`) |
+| `src/runtime/native.js` | `projectsDir()`, `spawnSpec({ resumeId \| sessionId, cwd, appendSystemPrompt, initialPrompt })`, `detectCaps()` (`claude --help` → czy jest `--append-system-prompt`), `cleanEnv()`. Tu i tylko tu wiadomo, jak i gdzie działa `claude` (pod przyszły runtime `wsl`) |
 | `src/sessions.js` | `listSessions(limit=200)` — szczegóły niżej |
 | `src/store.js` | Atomowy odczyt/zapis JSON w `app.getPath('userData')` |
 | `src/pty.js` | Jeden PTY na zakładkę (`@lydell/node-pty`) |
 | `src/usage.js` | (etap 3) limity planu |
-| `src/clickup.js` | REST ClickUp v2 z osobistym tokenem (nagłówek `Authorization: <token>` bez „Bearer”): `getUser`, `getTeams`, `getMyTasks` (`/team/{id}/task?assignees[]=…&include_closed=false&subtasks=true`, strony po 100, odfiltrowane `hiddenStatuses`, domyślnie `closed`) |
+| `src/clickup.js` | REST ClickUp v2 z osobistym tokenem (nagłówek `Authorization: <token>` bez „Bearer”): `getUser`, `getTeams`, `getMyTasks` (`/team/{id}/task?assignees[]=…&include_closed=false&subtasks=true`, strony po 100, odfiltrowane `hiddenStatuses`, domyślnie `closed`), `getTask` (custom ID → `?custom_task_ids=true&team_id=…`), `getTaskDetail` (opis Markdown, załączniki, checklisty, subtaski, komentarze), `fetchAttachment` (tylko https i hosty ClickUp → `data:` URL, limit 15 MB) |
 | `src/secrets.js` | Sekrety (token ClickUp) zaszyfrowane `safeStorage` w `secrets.bin`. Tylko main |
 | `src/hubstaff.js` | (etap 5) czas pracy |
-| `renderer/` | `index.html`, `style.css` i zwykłe skrypty (bez ES modules, kolejność w `index.html`): `util.js` (`$`, `el`, `relTime`), `menu.js` (`CtxMenu`), `toast.js` (`Toasts`), `groups.js` (`Groups`, `PALETTE` — model grup), `dialogs.js` (`Dialogs`: `promptName`, `statusEditor`, `manageStatuses`, `newSession`, `askCloseTab`, `settings`; jedno okno naraz — otwarcie nowego porzuca poprzednie), `sidebar.js` (`Sidebar`), `tabs.js` (`Tabs`), `app.js` (`App`, start). xterm i fit addon jako UMD z `../node_modules` (globalne `Terminal`, `FitAddon.FitAddon`) |
+| `renderer/` | `index.html`, `style.css` i zwykłe skrypty (bez ES modules, kolejność w `index.html`): `util.js` (`$`, `el`, `relTime`, `fullTime`), `taskview.js` (`TaskView`: widok taska), `menu.js` (`CtxMenu`), `toast.js` (`Toasts`), `groups.js` (`Groups`, `PALETTE` — model grup), `dialogs.js` (`Dialogs`: `promptName`, `statusEditor`, `manageStatuses`, `newSession`, `askCloseTab`, `settings`; jedno okno naraz — otwarcie nowego porzuca poprzednie), `sidebar.js` (`Sidebar`), `tabs.js` (`Tabs`), `app.js` (`App`, start). xterm i fit addon, `marked` i `DOMPurify` jako UMD z `../node_modules` (globalne `Terminal`, `FitAddon.FitAddon`, `marked`, `DOMPurify`) |
 | `scripts/screenshot.js` | Off-screen render prawdziwego UI do PNG |
 
 ### Kanały IPC
-- sesje: `sessions:list`, `session:pickFolder`, `session:newId` (uuid z main), `session:start({ tabId, sessionId, cwd, isNew, cols, rows })` — `isNew` → `--session-id <uuid>` (renderer zna ID zanim powstanie transkrypt), inaczej `--resume <id>`. `tabId === sessionId`
+- sesje: `sessions:list`, `session:pickFolder`, `session:newId` (uuid z main), `session:start({ tabId, sessionId, cwd, isNew, cols, rows, taskContext?, initialPrompt? })` — `isNew` → `--session-id <uuid>` (renderer zna ID zanim powstanie transkrypt), inaczej `--resume <id>`. `tabId === sessionId`
 - stan: `store:get(name)`, `store:save(name, data)` dla `groups`, `tabs`, `settings`
 - terminale: `pty:write`, `pty:resize`, `pty:kill`
 - system: `open:external`, `clipboard:read`, `clipboard:write`, `app:info` (platforma, wersja)
 - main → renderer: `pty:data`, `pty:exit`, `sessions:changed`
-- ClickUp: `clickup:status` (bez tokenu: `configured`, user, workspace), `clickup:connect(token)` (weryfikuje, trzyma token w pamięci main), `clickup:save({ teamId })` (zapisuje token do `secrets`, user/workspace do `settings.clickup`), `clickup:disconnect`, `clickup:tasks({ force })` (cache 2 min w `clickup-tasks.json`, równoległe wywołania dołączają do trwającego)
+- ClickUp: `clickup:status` (bez tokenu: `configured`, user, workspace), `clickup:connect(token)` (weryfikuje, trzyma token w pamięci main), `clickup:save({ teamId })` (zapisuje token do `secrets`, user/workspace do `settings.clickup`), `clickup:disconnect`, `clickup:tasks({ force })` (cache 2 min w `clickup-tasks.json`, równoległe wywołania dołączają do trwającego), `clickup:taskStatuses(keys)` (status pojedynczych tasków, max 40 na wywołanie, 4 równolegle), `clickup:taskDetail(key)`, `clickup:attachment(url)`
 - (później) `usage:get`, `hubstaff:*`
 
 ### Pliki danych (`userData`)
 | Plik | Zawartość |
 |---|---|
-| `groups.json` | `{ statuses: [{ id, name, color, builtin? }], assignments: { sessionId: 'status:<id>' }, titles: { sessionId: name }, collapsed: { key: bool }, ui: { tab }, v3?: true }`. `Groups.normalize()` uzupełnia wbudowane statusy i migruje starsze formaty; `v3` = jednorazowe porządkowanie już zrobione |
+| `groups.json` | `{ statuses: [{ id, name, color, builtin? }], assignments: { sessionId: 'status:<id>' }, titles: { sessionId: name }, collapsed: { key: bool }, ui: { tab }, v3?: true, autoCloseSkip: { 'DEV-123': true }, fromTask: { sessionId: 'DEV-123' } }`. `Groups.normalize()` uzupełnia wbudowane statusy i migruje starsze formaty; `v3` = jednorazowe porządkowanie już zrobione |
 | `tabs.json` | `{ tabs: [{ sessionId, cwd }], active }` |
 | `settings.json` | `{ runtime, taskPrefix, clickupWorkspaceId, onboarding: { clickupAsked }, folders: { list: { listId: cwd }, folder: { folderId: cwd } }, clickup: { userId, username, email, teamId, teamName, hiddenStatuses } }`. Bez sekretów. `clickup` zapisuje wyłącznie main (przy `store:save('settings')` z renderera main nadpisuje go wartością z dysku) |
 | `secrets.bin` | Tokeny ClickUp/Hubstaff zaszyfrowane `safeStorage`. Czyta tylko main |
@@ -63,6 +63,8 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
 - Wznowienie sesji dopisuje do transkryptu linie techniczne, więc mtime rośnie i sesja wskakuje do Recent. To normalne.
 
 ### Zakładki (`renderer/tabs.js`)
+- Dwa rodzaje: **sesja** (`kind: 'session'`, id = sessionId, xterm + PTY) i **podgląd taska** (`kind: 'task'`, id `task:<KEY>`, tylko `TaskView`, nie zapamiętywany). `Tabs.has(id)` dotyczy tylko sesji.
+- Zakładka sesji to `.pane`: `.pane-bar` (przełącznik [Terminal] [Task DEV-123], widoczny gdy sesja ma task i ClickUp jest skonfigurowany), `.term` (xterm), `.taskhost` (`TaskView`). Fit tylko gdy widać terminal (`view === 'term'`).
 - `Tabs.create()` tworzy xterm (`lineHeight: 1.15`, font z `app:info`) + fit addon. Ukryte zakładki startują z domyślnym rozmiarem, `activate()` robi fit i wysyła `pty:resize`.
 - `persist()` przy otwarciu, zamknięciu i przełączeniu. Main ignoruje zapis `tabs` w trybie headless i po rozpoczęciu zamykania.
 - `restore()` raz po pierwszym `loadSessions()`; main (`store:get('tabs')`) odrzuca zakładki bez transkryptu (nowa sesja bez pierwszego promptu nie jest wznawialna).
@@ -92,6 +94,9 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
 - `App.clickup = { status, tasks, fetchedAt, error, loading }`; `App.loadClickup({ force })` przy starcie (cache), co 10 min i przyciskiem ↻.
 - Zakładka Taski: drzewo Folder → Lista (lista bez folderu = grupa najwyższego poziomu), sortowane wg ostatniej zmiany; klucze zwinięcia `cu:f:<id>`, `cu:l:<id>`. Wiersz: `DEV-…`, nazwa, status (kolor z ClickUp), priorytet, liczba sesji, termin (czerwony po terminie). Kliknięcie rozwija (`Sidebar.expandedTask`): + Nowa sesja, Otwórz w ClickUp, sesje tego taska. Prawy klik: menu z tymi akcjami + kopiowanie ID/linku.
 - `App.newSessionFromTask(t)`: nazwa `DEV-123 <tytuł>`, folder z `App.suggestFolder(t)` (lista → sesja tego taska → folder ClickUp), po utworzeniu `App.rememberFolder`. Użytkownik zawsze zatwierdza folder.
+- **Auto-Completed** (`App.syncClosedTasks`, po każdym udanym `loadClickup`): kandydaci to taski z co najmniej jedną sesją nie-Completed, których nie ma na liście otwartych tasków. Ich status jest sprawdzany przez `clickup:taskStatuses`; status z `hiddenStatuses` (`closed`) → wszystkie sesje taska dostają `completed`, także otwarte w zakładkach (zakładki zostają). Toast z Cofnij przywraca poprzednie statusy i wpisuje task do `groups.autoCloseSkip`; wpis znika, gdy task wróci na listę otwartych. Błędy/404 (np. cudze lub usunięte taski) są ignorowane.
+- **Widok taska** (`renderer/taskview.js`): `TaskView.show(host, key)` → `clickup:taskDetail` (cache w pamięci, ↻ wymusza). Opis: `marked.parse` → `DOMPurify.sanitize` (bez style/form/iframe/atrybutów style); hook DOMPurify przenosi `src` obrazków do `data-src`, a `wireContent` ładuje je przez `clickup:attachment` (CSP rendera bez zdalnych obrazów). Linki → `openExternal` (https). Załączniki: obrazki jako miniatury z lightboxem, reszta otwierana w przeglądarce. Treść tekstowa (komentarze, nazwy) przez `textContent`.
+- **Kontekst taska w sesji:** sesje utworzone z taska są w `groups.fromTask[sessionId] = 'DEV-123'`. `Tabs.start` przekazuje `taskContext { key, title, url }`; main buduje z niego tekst i dodaje `--append-system-prompt` przy każdym starcie i wznowieniu (gdy `detectCaps` potwierdzi flagę; inaczej dla nowej sesji wpisuje `DEV-123 ` w prompt bez wysyłania). Checkbox „Zacznij od pobrania taska” w `Dialogs.newSession` → `initialPrompt` (pozycyjny argument `claude`, tylko przy pierwszym starcie). Na Windows przez shim `.cmd` znaki specjalne cmd są usuwane z tych tekstów.
 - `App.cuTask(key)` łączy grupę sesji z taskiem: nagłówek grupy pokazuje nazwę z ClickUp, menu grupy otwiera nową sesję przez `newSessionFromTask`.
 
 ## Zasady
@@ -99,7 +104,7 @@ Transkrypty Claude'a (`~/.claude/projects/`) są **tylko czytane**, nigdy edytow
 - **Zero tokenów w sidebarze.** Wszystko z lokalnego parsowania. Żadnego `claude -p` ani API Anthropic do budowania listy. Wywołania zużywające limit tylko na wyraźne kliknięcie.
 - **Sekrety tylko w main.** Token OAuth Claude'a, tokeny ClickUp i Hubstaff: nigdy w logach, plikach JSON, kodzie ani w kierunku main → renderer. Jedyny wyjątek: token ClickUp wpisany przez użytkownika idzie raz renderer → main (`clickup:connect`). Zapis przez `safeStorage` (`src/secrets.js`). Nie proś użytkownika o wklejanie tokenów w czacie.
 - Renderer: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. Nowe możliwości = handler IPC w `main.js` + metoda w `preload.js`.
-- Tytuły sesji, własne nazwy, nazwy kategorii i dane z ClickUp to treść użytkownika: tylko `textContent`, nigdy `innerHTML`.
+- Tytuły sesji, własne nazwy, nazwy kategorii i dane z ClickUp to treść użytkownika: tylko `textContent`, nigdy `innerHTML`. Jedyny wyjątek: opis taska (Markdown) w `TaskView.toSafeHtml` — zawsze przez `DOMPurify`. Statyczne ikony SVG z kodu mogą iść przez `innerHTML`.
 - `open:external` przyjmuje tylko `https:`.
 - Zapisy configu atomowe (tmp + rename).
 - Ścieżki zawsze przez `path` i `os.homedir()`. Żadnych `~` ani `/` na sztywno.

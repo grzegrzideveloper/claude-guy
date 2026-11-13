@@ -1,6 +1,8 @@
 // Group model. Groups are automatic (task `DEV-…`, otherwise project); a status is a label on a session.
 // groups.json: { statuses: [{ id, name, color, builtin? }], assignments: { sessionId: 'status:<id>' },
-//                titles: { sessionId: name }, collapsed: { key: bool }, ui: { tab }, v3?: true }
+//                titles: { sessionId: name }, collapsed: { key: bool }, ui: { tab }, v3?: true,
+//                autoCloseSkip: { 'DEV-123': true },  (undone auto-Completed, until the task is open again)
+//                fromTask: { sessionId: 'DEV-123' } }  (sessions created from a ClickUp task → task context in claude)
 const PALETTE = ['#e3b341', '#f0883e', '#db61a2', '#a371f7', '#58a6ff', '#39c5cf', '#3fb950', '#8b949e'];
 
 const Groups = {
@@ -31,6 +33,8 @@ const Groups = {
       statuses, assignments, collapsed, ui,
       titles: g.titles && typeof g.titles === 'object' ? g.titles : {},
       ...(g.v3 ? { v3: true } : {}),
+      autoCloseSkip: g.autoCloseSkip && typeof g.autoCloseSkip === 'object' ? g.autoCloseSkip : {},
+      fromTask: g.fromTask && typeof g.fromTask === 'object' ? g.fromTask : {},
     };
   },
 

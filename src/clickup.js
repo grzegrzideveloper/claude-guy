@@ -77,4 +77,85 @@ async function getMyTasks(token, { teamId, userId, hiddenStatuses = ['closed'] }
   return out;
 }
 
-module.exports = { getUser, getTeams, getMyTasks, ClickUpError };
+function taskPath(key, teamId, extra = {}) {
+  const custom = /^[A-Za-z][A-Za-z0-9]*-\d+$/.test(key);
+  const q = new URLSearchParams(extra);
+  if (custom) { q.set('custom_task_ids', 'true'); q.set('team_id', teamId); }
+  const qs = q.toString();
+  return `/task/${encodeURIComponent(key)}${qs ? `?${qs}` : ''}`;
+}
+
+// Full task for the task view: description (markdown), attachments, checklists, subtasks, comments.
+async function getTaskDetail(token, key, teamId) {
+  const t = await request(token, taskPath(key, teamId, { include_markdown_description: 'true', include_subtasks: 'true' }));
+  let comments = [];
+  let commentsError = null;
+  try {
+    const c = await request(token, `/task/${encodeURIComponent(t.id)}/comment`);
+    comments = (c.comments || []).map(x => ({
+      id: String(x.id),
+      text: x.comment_text || '',
+      user: x.user ? { username: x.user.username || x.user.email || '?', color: x.user.color || null, initials: x.user.initials || '' } : null,
+      date: x.date ? Number(x.date) : null,
+      replies: Number(x.reply_count || 0),
+    })).sort((a, b) => (a.date || 0) - (b.date || 0));
+  } catch (err) {
+    commentsError = err.message;
+  }
+  const base = mapTask(t);
+  const people = u => ({ username: u.username || u.email || '?', color: u.color || null, initials: u.initials || '' });
+  return {
+    ...base,
+    markdown: t.markdown_description || t.text_content || '',
+    created: t.date_created ? Number(t.date_created) : null,
+    creator: t.creator ? people(t.creator) : null,
+    assignees: (t.assignees || []).map(people),
+    tags: (t.tags || []).map(x => ({ name: x.name, fg: x.tag_fg || null, bg: x.tag_bg || null })),
+    attachments: (t.attachments || []).filter(a => !a.deleted).map(a => ({
+      id: String(a.id),
+      title: a.title || a.id,
+      ext: (a.extension || '').toLowerCase(),
+      size: a.size ? Number(a.size) : null,
+      url: a.url || a.url_w_host || null,
+      thumb: a.thumbnail_large || a.thumbnail_medium || a.thumbnail_small || null,
+      date: a.date ? Number(a.date) : null,
+    })),
+    checklists: (t.checklists || []).map(c => ({
+      name: c.name,
+      items: (c.items || []).sort((a, b) => (a.orderindex || 0) - (b.orderindex || 0)).map(i => ({ name: i.name, resolved: !!i.resolved })),
+    })),
+    subtasks: (t.subtasks || []).map(x => ({
+      id: x.id, customId: x.custom_id || null, name: x.name,
+      status: x.status ? { name: x.status.status, color: x.status.color || null } : null,
+    })),
+    comments,
+    commentsError,
+  };
+}
+
+// Attachment / image bytes for the renderer (which can't load remote images under its CSP).
+// Only ClickUp hosts. Tries without the token first; sends it only to ClickUp's own attachment hosts.
+const ATTACH_HOST = /(^|\.)(clickup-attachments\.com|clickup\.com|clickupusercontent\.com)$/i;
+async function fetchAttachment(token, url, maxBytes = 15 * 1024 * 1024) {
+  let u;
+  try { u = new URL(url); } catch { throw new ClickUpError('Nieprawidłowy adres załącznika.', 0); }
+  const testHost = !!process.env.CLICKUP_API_BASE && u.hostname === '127.0.0.1'; // mock API in tests only
+  if (!testHost && (u.protocol !== 'https:' || !ATTACH_HOST.test(u.hostname))) throw new ClickUpError('Załącznik spoza ClickUp.', 0);
+  const get = async withToken => fetch(u, { headers: withToken ? { Authorization: token } : {}, redirect: 'follow' });
+  let res = await get(false);
+  if (res.status === 401 || res.status === 403) res = await get(true);
+  if (!res.ok) throw new ClickUpError(`Nie udało się pobrać załącznika (${res.status}).`, res.status);
+  const len = Number(res.headers.get('content-length') || 0);
+  if (len > maxBytes) throw new ClickUpError('Załącznik jest za duży do podglądu.', 413);
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > maxBytes) throw new ClickUpError('Załącznik jest za duży do podglądu.', 413);
+  const type = (res.headers.get('content-type') || 'application/octet-stream').split(';')[0].trim();
+  return { type, dataUrl: `data:${type};base64,${buf.toString('base64')}` };
+}
+
+// One task by key: a custom id like DEV-123 (needs team_id) or a raw ClickUp id.
+async function getTask(token, key, teamId) {
+  return mapTask(await request(token, taskPath(key, teamId)));
+}
+
+module.exports = { getUser, getTeams, getMyTasks, getTask, getTaskDetail, fetchAttachment, ClickUpError };

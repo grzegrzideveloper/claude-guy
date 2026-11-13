@@ -140,12 +140,14 @@ const Dialogs = {
 
   // New session: folder (suggested, always confirmed by the user) + optional name.
   // Resolves to { cwd, name } or null.
-  newSession({ cwd = null, name = '', suggested = false } = {}) {
+  // taskKey: the session is created from this ClickUp task → offers "start by fetching the task".
+  // Resolves to { cwd, name, startPrompt } or null.
+  newSession({ cwd = null, name = '', suggested = false, taskKey = null } = {}) {
     let folder = cwd;
-    let input, pathEl, pickBtn, err;
+    let input, pathEl, pickBtn, err, startBox;
     const submit = () => {
       if (!folder) { err.textContent = 'Wybierz folder, w którym ma pracować Claude.'; return undefined; }
-      return { cwd: folder, name: input.value.trim() };
+      return { cwd: folder, name: input.value.trim(), startPrompt: !!(startBox && startBox.checked) };
     };
     return this.open((box, done) => {
       box.append(el('div', 'dialog-title', 'Nowa sesja'));
@@ -171,6 +173,16 @@ const Dialogs = {
       box.append(el('div', 'dialog-label', 'Nazwa (opcjonalnie)'));
       input = this.input(name, `np. ${App.settings.taskPrefix}-123 formularz B2C — puste: nazwą będzie pierwszy prompt`);
       box.append(input);
+      if (taskKey) {
+        const lab = el('label', 'dialog-check');
+        startBox = el('input');
+        startBox.type = 'checkbox';
+        const txt = el('div');
+        txt.append(el('div', null, 'Zacznij od pobrania taska'),
+          el('div', 'dialog-hint', `Claude od razu pobierze ${taskKey} przez MCP ClickUp i streści, co jest do zrobienia (zużywa limit). Bez tego zaznaczenia sesja i tak zna ID taska.`));
+        lab.append(startBox, txt);
+        box.append(lab);
+      }
       err = el('div', 'dialog-error');
       box.append(err);
       this.buttons(box, [
